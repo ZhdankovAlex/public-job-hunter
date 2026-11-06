@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% set labels = {"initiative": "инициатива", "early_detection": "заметил раньше других", "pushback": "предложил другое",
+                 "research": "незнакомая тема", "incident": "инцидент", "ownership": "ответственность"} %}
+{% block title %}Подготовка · job-hunter{% endblock %}
+{% block content %}
+<h1>Подготовка к интервью</h1>
+<form method="get" class="add-skill">
+  <input name="url" type="url" placeholder="Ссылка на вакансию — из отчёта или любая" value="{{ url }}" style="flex:1;min-width:320px">
+  <button class="primary" type="submit">🎤 Собрать</button>
+</form>
+<p class="muted small">Только факты из <code>cv/base.toml</code> — ничего не придумывается. Истории — раздел <code>[[stories]]</code>
+  там же (черновики: проверь формулировки). Вакансия без ссылки — вставь текст на странице «Резюме» и возьми ссылку оттуда.</p>
+{% if error %}<p class="bad">⚠️ {{ error }}</p>{% endif %}
+
+{% if r %}
+<h2 class="sub-h">{{ r.company }} — {{ r.title }} <span class="muted small">Fit {{ r.fit }}% · <a href="{{ r.url }}" target="_blank">вакансия ↗</a></span></h2>
+<section class="grid two">
+  <div class="card">
+    <h2>Рассказ о себе (черновик, EN)</h2>
+    <p class="pitch">{{ r.pitch }}</p>
+    <p class="muted small">Структура: текущая роль → компания одной фразой → задачи языком вакансии → стек → прошлый опыт короче →
+      вопрос «про что рассказать подробнее». Произнеси вслух 2–3 раза, подстрой под себя.</p>
+    <h2 class="sub-h">Требования, которые у тебя есть</h2>
+    <ul class="checks">{% for h in r.have %}<li class="ok">✔ <b>{{ h.tech }}</b> <span class="small muted">— {{ h.proof[:220] }}</span></li>{% endfor %}</ul>
+    {% if r.missing or r.mismatch or r.partial %}
+    <h2 class="sub-h">Чего нет — сказать честно и показать близкое</h2>
+    <ul class="checks">
+      {% for m in r.missing %}<li class="warn">⚠ {{ m }}</li>{% endfor %}
+      {% for m in r.partial %}<li class="warn">◐ {{ m }}</li>{% endfor %}
+      {% for m in r.mismatch %}<li class="warn">✖ {{ m }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+
+  <div class="col">
+    <div class="card">
+      <h2>Поведенческие вопросы → истории</h2>
+      <ul class="picks qa">{% for b in r.behavioral %}<li><div>{{ b.question }}</div>
+        <div class="small">{% for s in b.stories %}<span class="chip">{{ s }}</span> {% else %}<span class="muted">подходящей истории нет — подумай заранее</span>{% endfor %}</div></li>{% endfor %}</ul>
+    </div>
+    <div class="card">
+      <h2>Истории ближе всего к вакансии</h2>
+      {% for s in r.stories %}
+      <details {{ 'open' if loop.first }}><summary><b>{{ s.title }}</b>{% if s.draft %} <span class="tag">черновик</span>{% endif %}
+        <span class="small muted">{% for q in s.questions %}{{ labels.get(q, q) }}{{ ", " if not loop.last }}{% endfor %}</span></summary>
+        <p class="small"><b>Situation.</b> {{ s.situation }}<br><b>Action.</b> {{ s.action }}<br><b>Result.</b> {{ s.result }}</p>
+      </details>
+      {% endfor %}
+    </div>
+    <div class="card">
+      <h2>К HR-звонку</h2>
+      <ul class="small">{% for h in r.hr %}<li>{{ h }}</li>{% endfor %}</ul>
+      {% if r.market %}<p class="small">📊 <a href="{{ r.market_url }}" target="_blank">{{ r.market }}</a> — все грейды; senior ближе к 75-му перцентилю.</p>{% endif %}
+      <h2 class="sub-h">Вопросы к ним</h2>
+      <ul class="small">{% for q in r.ask %}<li>{{ q }}</li>{% endfor %}</ul>
+    </div>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

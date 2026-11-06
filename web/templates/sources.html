@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Источники · job-hunter{% endblock %}
+{% set kind_names = {"ats": "ATS-борды компаний", "aggregator": "Агрегаторы", "site": "Сайты без ATS", "career_page": "Карьерные страницы"} %}
+{% block content %}
+<h1>Источники</h1>
+<p class="muted">{% if built %}По последнему прогону ({{ built }}).{% else %}Данные появятся после первого прогона с новой версией скрипта.{% endif %}
+  Сколько вакансий дал каждый источник до фильтров.</p>
+
+<section class="tiles wide" style="--n: {{ kinds|length + 2 }}">
+  {% for kind, k in kinds.items() %}
+  <div class="tile"><b>{{ k.jobs }}</b><span>{{ kind_names.get(kind, kind) }}: {{ k.sources }} источников
+    · пустых {{ k.empty }}{% if k.errors %} · <em class="bad">ошибок {{ k.errors }}</em>{% endif %}</span></div>
+  {% endfor %}
+  <div class="tile"><b>{{ telegram|length }}</b><span>Telegram-каналов</span></div>
+  <div class="tile"><b>{{ freehire|length }}</b><span>запросов freehire.me</span></div>
+</section>
+
+<section class="grid two">
+  <div class="card">
+    <h2>Telegram-каналы</h2>
+    {% if telegram %}
+    <div class="chips">{% for ch in telegram %}<a class="chip" href="https://t.me/s/{{ ch }}" target="_blank">@{{ ch }}</a>{% endfor %}</div>
+    {% else %}
+    <p class="small">Выключено: settings.toml → [telegram] enabled = true и список channels.</p>
+    {% endif %}
+  </div>
+  <div class="card">
+    <h2>Запросы freehire.me</h2>
+    <ul class="queries">
+      {% for q in freehire %}
+      <li class="{{ 'muted' if q.skipped }}">
+        <div class="q-head"><b>{{ q.title }}</b>
+          {% if q.skipped %}<span class="small">не выполнялся</span>
+          {% elif q.fetched is not none %}<span class="small">получено <b>{{ q.fetched }}</b>{% if q.total %} из {{ q.total }} на сайте{% endif %}</span>{% endif %}
+        </div>
+        <div class="chips">{% for k, v in q.params.items() if k not in ("limit", "sort", "order", "description_format", "offset") and v != "" %}<span class="chip small">{{ k }}: {{ v }}</span>{% endfor %}</div>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+
+<section class="card">
+  <div class="table-head">
+    <h2>Все источники <span class="muted small">{{ rows|length }}</span></h2>
+    <div class="feed-filter" id="kind-filter">
+      <button class="on" data-kind="">все</button>
+      {% for kind in kinds %}<button data-kind="{{ kind }}">{{ kind_names.get(kind, kind) }}</button>{% endfor %}
+      <button data-kind="error">с ошибкой</button>
+      <button data-kind="empty">пустые</button>
+    </div>
+    <input id="q" type="search" placeholder="Поиск по названию…">
+  </div>
+  <table class="data" id="sources">
+    <thead><tr><th>Источник</th><th>Вид</th><th>ATS / slug</th><th class="num">Вакансий</th><th>Ошибка</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+    <tr data-kind="{{ r.kind }}" data-error="{{ 1 if r.error else 0 }}" data-empty="{{ 1 if r.jobs == 0 and not r.error else 0 }}">
+      <td>{{ r.name }}</td>
+      <td class="muted small">{{ kind_names.get(r.kind, r.kind) }}</td>
+      <td class="small">{% if r.platform %}{{ r.platform }} / {{ r.slug }}{% elif r.kind == "ats" %}<span class="muted">не найден</span>{% endif %}</td>
+      <td class="num">{% if r.jobs %}<b>{{ r.jobs }}</b>{% else %}<span class="muted">0</span>{% endif %}</td>
+      <td class="small bad">{{ r.error }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+let kind = '';
+const rows = [...document.querySelectorAll('#sources tbody tr')], q = document.getElementById('q');
+function apply() {
+  const text = q.value.trim().toLowerCase();
+  for (const r of rows) {
+    const okKind = !kind || (kind === 'error' ? r.dataset.error === '1' : kind === 'empty' ? r.dataset.empty === '1' : r.dataset.kind === kind);
+    r.hidden = !(okKind && (!text || r.cells[0].textContent.toLowerCase().includes(text)));
+  }
+}
+document.querySelectorAll('#kind-filter button').forEach(b => b.addEventListener('click', () => {
+  kind = b.dataset.kind;
+  document.querySelectorAll('#kind-filter button').forEach(x => x.classList.toggle('on', x === b));
+  apply();
+}));
+q.addEventListener('input', apply);
+</script>
+{% endblock %}

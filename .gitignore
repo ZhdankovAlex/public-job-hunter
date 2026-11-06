@@ -1,0 +1,31 @@
+# окружение и кэши
+.venv/
+__pycache__/
+*.pyc
+
+# данные прогонов: вакансии, отчёты, кэш почты, токены
+state/
+reports/
+cv_out/
+*.log
+*.out
+
+# кэш найденных ATS-бордов (создаётся сам)
+ats_mapping.json
+
+# доступы Google (OAuth-клиент, сервисный ключ)
+credentials.json
+gmail_client.json
+
+# личное: в репозитории только примеры *.example.* (код читает пример, если своего файла нет)
+settings.toml
+companies.txt
+profile.toml
+profile_overrides.json
+staffing_blacklist.txt
+applications_manual.toml
+cv/base.toml
+cv/*.pdf
+
+# локальные настройки Claude Code
+.claude/

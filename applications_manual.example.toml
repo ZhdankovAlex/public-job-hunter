@@ -1,0 +1,16 @@
+# Пример: истории откликов не из почты (Telegram, LinkedIn, звонки). Свой файл — applications_manual.toml
+# (он в .gitignore); его можно не создавать: веб-интерфейс («Отклики» → форма) создаст его сам.
+# События добавляются на страницу reports/applications.html вместе с письмами;
+# если компания есть и в почте, события объединяются.
+#
+# kind: applied (отклик / первый контакт) | interview (этап) | rejected (отказ) | offer | other
+# date — время переписки, note — что произошло, url — ссылка на вакансию (необязательно).
+
+[[application]]
+company = "Example Corp"
+source = "Telegram, рекрутер"
+events = [
+  { date = 2026-01-10T12:00:00, kind = "applied", note = "Рекрутер написал по вакансии Senior Python Developer", url = "https://example.com/jobs/123" },
+  { date = 2026-01-15T14:00:00, kind = "interview", note = "Техническое интервью" },
+  { date = 2026-01-20T10:00:00, kind = "rejected", note = "Отказ после интервью" },
+]

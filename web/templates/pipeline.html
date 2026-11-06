@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Пайплайн · job-hunter{% endblock %}
+{% block content %}
+<section class="hero card">
+  <div class="hero-head">
+    <div>
+      <div class="eyebrow" id="script">—</div>
+      <h1 id="headline">Загружаю состояние…</h1>
+      <div class="muted" id="subline"></div>
+    </div>
+    <div class="actions-col">
+      <div class="actions">
+        <button class="primary" data-run="all" data-skips="mail telegram freehire aggregators" title="Как run_daily.bat: сначала почта, потом вакансии">▶ Запустить прогон</button>
+        <button data-run="main" data-skips="telegram freehire aggregators" title="Галочка «без почты» здесь не действует">Только вакансии</button>
+        <button data-run="applications" data-skips="" title="Галочки «без …» здесь не действуют">Только почта</button>
+      </div>
+      <div class="skip-opts" title="Выключить этапы заранее. Действуют только подходящие кнопке: у «Только вакансии» — всё, кроме почты; у «Только почта» — ничего">
+        <span class="muted small">без:</span>
+        <label><input type="checkbox" value="mail"> почты</label>
+        <label><input type="checkbox" value="telegram"> Telegram</label>
+        <label><input type="checkbox" value="freehire"> freehire</label>
+        <label><input type="checkbox" value="aggregators"> агрегаторов</label>
+      </div>
+    </div>
+  </div>
+  <div class="overall">
+    <div class="overall-bar"><i id="overall-fill"></i></div>
+    <div class="overall-meta"><span id="overall-pct"></span><span id="overall-eta"></span></div>
+  </div>
+</section>
+
+<section class="grid pipe">
+  <div class="card stages-card">
+    <h2>Этапы</h2>
+    <ol class="stages" id="stages"></ol>
+  </div>
+
+  <div class="col">
+    <div class="card now">
+      <div class="now-head"><h2>Сейчас</h2>
+        <button class="skip-btn" id="skip-btn" hidden title="Остановить этап: собранное до этого пойдёт дальше">⏭ Пропустить этап</button>
+      </div>
+      <div class="now-title" id="now-title">—</div>
+      <div class="big-bar"><i id="now-fill"></i><span id="now-count"></span></div>
+      <div class="now-item" id="now-item"></div>
+      <div class="chips" id="active"></div>
+    </div>
+
+    <div class="tiles" id="tiles"></div>
+
+    <div class="card">
+      <h2>Что отбрасываем <span class="muted small" id="rejects-total"></span></h2>
+      <div class="hbars" id="rejects"></div>
+    </div>
+
+    <div class="card grow">
+      <h2>Откуда вакансии</h2>
+      <div class="hbars" id="kinds"></div>
+    </div>
+  </div>
+
+  <div class="card feed-card">
+    <h2>Лента</h2>
+    <div class="feed-filter">
+      <button class="on" data-kind="all">всё</button>
+      <button data-kind="found">найдено</button>
+      <button data-kind="reject">отброшено</button>
+      <button data-kind="source">источники</button>
+    </div>
+    <div class="feed-wrap"><ul class="feed" id="feed"></ul></div>
+    <details class="errors-box" id="errors-box" hidden>
+      <summary>Предупреждения <span class="muted small" id="errors-count"></span></summary>
+      <ul class="errors" id="errors"></ul>
+    </details>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/pipeline.js?v={{ v }}"></script>{% endblock %}

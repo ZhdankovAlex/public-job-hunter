@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Навыки · job-hunter{% endblock %}
+{% block content %}
+<h1>Навыки профиля</h1>
+<p class="muted">Из навыков складывается балл вакансии: вес каждого найденного в вакансии навыка суммируется
+  (плюс поправки за название, локацию и т.п.). Отрицательный вес — штраф: так можно «отфильтровать вниз»
+  вакансии с нежелательной технологией. Правки пишутся в <code>profile_overrides.json</code>, <code>profile.toml</code>
+  не меняется; балл пересчитается при <b>следующем прогоне</b>.
+  {% if day %}Доля — среди {{ relevant }} подходящих вакансий отчёта за {{ day }}.{% endif %}</p>
+
+<section class="card">
+  <div class="table-head">
+    <h2>Навыки <span class="muted small">{{ skills|length }}</span></h2>
+    <input id="q" type="search" placeholder="Поиск по названию…">
+  </div>
+  <table class="data skills" id="skills">
+    <thead><tr><th>Вкл.</th><th>Навык</th><th>Шаблон</th><th class="num">Вес</th><th class="num">В вакансиях</th><th></th></tr></thead>
+    <tbody>
+    {% for s in skills|sort(attribute="weight", reverse=true) %}
+    <tr data-name="{{ s.name }}" class="{{ 'off' if s.disabled }}">
+      <td><input type="checkbox" class="on" {{ '' if s.disabled else 'checked' }} title="учитывать в балле"></td>
+      <td><b>{{ s.name }}</b>{% if s.added %} <span class="tag">свой</span>{% endif %}{% if s.invalid %} <span class="bad small">неверный шаблон</span>{% endif %}</td>
+      <td class="small muted mono">{{ s.pattern }}</td>
+      <td class="num"><input type="number" class="w" min="-30" max="30" value="{{ s.weight }}">
+        {% if s.weight != s.base_weight and not s.added %}<div class="small muted">было {{ s.base_weight }}</div>{% endif %}</td>
+      <td class="num"><div class="mini"><i style="width:{{ s.share }}%"></i></div><span class="small">{{ s.share }}% · {{ s.matches }}</span></td>
+      <td>{% if s.added %}<button class="reset small" title="удалить свой навык">удалить</button>
+        {% elif s.weight != s.base_weight or s.disabled %}<button class="reset small" title="вернуть как в profile.toml">сброс</button>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Добавить свой навык</h2>
+  <form id="add" class="add-skill">
+    <input name="name" placeholder="Название, например ClickHouse" required>
+    <input name="pattern" placeholder="Регулярка, например \bclickhouse\b" required class="mono">
+    <input name="weight" type="number" value="2" min="-30" max="30" title="вес; отрицательный — штраф">
+    <button class="primary" type="submit">Добавить</button>
+  </form>
+  <div class="muted small" id="add-status"></div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+const api = (url, method, body) => fetch(url, { method, headers: { 'Content-Type': 'application/json' },
+  body: body ? JSON.stringify(body) : undefined }).then(async r => { if (!r.ok) throw new Error((await r.json()).detail); return r.json(); });
+const enc = encodeURIComponent;
+document.querySelectorAll('#skills tbody tr').forEach(tr => {
+  const name = tr.dataset.name;
+  tr.querySelector('.on').addEventListener('change', e => api(`/api/skills/${enc(name)}`, 'PUT', { disabled: !e.target.checked })
+    .then(() => tr.classList.toggle('off', !e.target.checked)).catch(err => alert(err.message)));
+  tr.querySelector('.w').addEventListener('change', e => api(`/api/skills/${enc(name)}`, 'PUT', { weight: Number(e.target.value) })
+    .then(() => e.target.classList.add('saved')).catch(err => alert(err.message)));
+  const reset = tr.querySelector('.reset');
+  if (reset) reset.addEventListener('click', () => api(`/api/skills/${enc(name)}`, 'DELETE').then(() => location.reload()));
+});
+document.getElementById('add').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target;
+  api('/api/skills', 'POST', { name: f.name.value.trim(), pattern: f.pattern.value, weight: Number(f.weight.value) })
+    .then(() => location.reload()).catch(err => document.getElementById('add-status').textContent = '⚠️ ' + err.message);
+});
+const q = document.getElementById('q');
+q.addEventListener('input', () => document.querySelectorAll('#skills tbody tr').forEach(tr =>
+  tr.hidden = !tr.dataset.name.toLowerCase().includes(q.value.trim().toLowerCase())));
+</script>
+{% endblock %}

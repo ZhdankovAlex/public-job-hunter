@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Отклики · job-hunter{% endblock %}
+{% block main_class %}full{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <span class="muted">Статусы из почты и applications_manual.toml</span>
+  <button id="toggle-form">＋ Событие</button>
+  <button data-run="applications" class="primary">↻ Обновить почту</button>
+</div>
+<form class="event-form" id="event-form" {{ '' if prefill.company or prefill.url else 'hidden' }}>
+  <input name="company" list="companies" placeholder="Компания" required value="{{ prefill.company }}">
+  <datalist id="companies">{% for c in companies %}<option value="{{ c }}">{% endfor %}</datalist>
+  <select name="kind">
+    {% for k, label in kinds.items() %}<option value="{{ k }}" {{ 'selected' if k == (prefill.kind or 'applied') }}>{{ label }}</option>{% endfor %}
+  </select>
+  <input name="note" placeholder="Что произошло" value="{{ ('Отклик: ' ~ prefill.title) if prefill.title else '' }}" class="grow">
+  <input name="url" placeholder="Ссылка на вакансию (необязательно)" value="{{ prefill.url }}" class="grow">
+  <input name="source" placeholder="Откуда: сайт, LinkedIn, Telegram…">
+  <input name="date" type="datetime-local" title="по умолчанию — сейчас">
+  <button class="primary" type="submit">Сохранить</button>
+  <span class="small muted" id="event-status"></span>
+</form>
+{% if exists %}
+<iframe class="viewer" id="viewer" src="/files/reports/applications.html" title="Отклики"></iframe>
+{% else %}
+<p class="page muted">Страницы откликов ещё нет — нажмите «Обновить почту».</p>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+const form = document.getElementById('event-form');
+document.getElementById('toggle-form').addEventListener('click', () => { form.hidden = !form.hidden; });
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  const status = document.getElementById('event-status');
+  const body = { company: form.company.value.trim(), kind: form.kind.value, note: form.note.value,
+    url: form.url.value.trim(), source: form.source.value.trim(), date: form.date.value || null };
+  const r = await fetch('/api/applications/events', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const d = await r.json();
+  if (!r.ok) { status.textContent = '⚠️ ' + (typeof d.detail === 'string' ? d.detail : 'проверьте поля'); return; }
+  status.textContent = `✔ записано: ${d.company}, ${form.kind.selectedOptions[0].text.toLowerCase()}`;
+  form.note.value = ''; form.url.value = '';
+  const viewer = document.getElementById('viewer');
+  if (viewer) viewer.src = viewer.src.split('?')[0] + '?t=' + Date.now(); else location.reload();
+});
+document.querySelector('[data-run]').addEventListener('click', async e => {
+  const b = e.currentTarget;
+  b.disabled = true;
+  b.textContent = 'Читаю почту…';
+  const r = await fetch('/api/runs', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: 'applications' }) });
+  if (!r.ok) { alert((await r.json()).detail); b.disabled = false; b.textContent = '↻ Обновить почту'; return; }
+  const timer = setInterval(async () => {
+    const d = await (await fetch('/api/progress')).json();
+    if (d && !d.busy) { clearInterval(timer); location.reload(); }
+  }, 2000);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,9 @@
+# в образ попадает только requirements.txt (код и данные монтируются volume'ом)
+.venv/
+__pycache__/
+state/
+reports/
+cv_out/
+*.log
+gmail_client.json
+credentials.json

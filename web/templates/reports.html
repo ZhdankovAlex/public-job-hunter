@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Отчёты · job-hunter{% endblock %}
+{% block main_class %}split{% endblock %}
+{% block content %}
+<aside class="side">
+  <h2>Отчёты <span class="muted small">{{ reports|length }}</span></h2>
+  {% if not reports %}
+  <p class="muted">Отчётов пока нет — запустите прогон на странице «Пайплайн».</p>
+  {% endif %}
+  <ul class="report-list">
+    {% for r in reports %}
+    <li class="{{ 'on' if r.file == current }}">
+      <a href="/reports?file={{ r.file }}">
+        <b>{{ r.date }}</b>
+        <span class="muted small">собран {{ r.built }} · {{ r.size_kb }} КБ</span>
+      </a>
+      <span class="links small">
+        <a href="/files/reports/{{ r.file }}" target="_blank" title="открыть в новой вкладке">↗</a>
+        {% if r.md %}<a href="/files/reports/{{ r.file|replace('.html', '.md') }}" target="_blank" title="Markdown-версия">MD</a>{% endif %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+</aside>
+<div class="split-main">
+  <div class="toolbar">
+    <button class="side-toggle" id="side-toggle" type="button" title="Скрыть / показать список отчётов">
+      <span class="nav-ic" aria-hidden="true">«</span><span>Список отчётов</span></button>
+    <span class="muted small">{{ current or '' }}</span>
+  </div>
+  {% if current %}
+  <iframe class="viewer" src="/files/reports/{{ current }}" title="Отчёт {{ current }}"></iframe>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+// список отчётов слева прячется по кнопке; выбор помнится в браузере
+const split = document.querySelector('main.split');
+try { if (localStorage.getItem('reports-side-off') === '1') split.classList.add('side-off'); } catch (e) {}
+document.getElementById('side-toggle').addEventListener('click', () => {
+  const off = split.classList.toggle('side-off');
+  try { localStorage.setItem('reports-side-off', off ? '1' : '0'); } catch (e) {}
+});
+</script>
+{% endblock %}

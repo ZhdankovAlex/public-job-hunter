@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}job-hunter{% endblock %}</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
+<link rel="stylesheet" href="/static/app.css?v={{ v }}">
+<script>
+  // до отрисовки, чтобы панель не «прыгала»: свёрнута ли она (выбор пользователя в localStorage)
+  try { if (localStorage.getItem('nav-collapsed') === '1') document.documentElement.classList.add('nav-collapsed'); } catch (e) {}
+</script>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+<aside class="sidenav">
+  <a class="brand" href="/" title="job-hunter">
+    <span class="brand-ic" aria-hidden="true">🔍</span>
+    <span class="nav-label">job-hunter</span>
+  </a>
+  <nav>
+    {% for key, label, icon in nav %}
+    <a href="/{{ key }}" class="{{ 'on' if key == active }}" title="{{ label }}">
+      <span class="nav-ic" aria-hidden="true">{{ icon }}</span><span class="nav-label">{{ label }}</span>
+    </a>
+    {% endfor %}
+  </nav>
+  <div class="sidenav-foot">
+    <span class="run-pill" id="run-pill" hidden><i class="pulse"></i><span class="nav-label" id="run-pill-text"></span></span>
+    <button class="nav-toggle" id="nav-toggle" type="button" title="Свернуть / развернуть панель" aria-label="Свернуть / развернуть панель">
+      <span class="nav-ic" aria-hidden="true">«</span><span class="nav-label">Свернуть</span>
+    </button>
+  </div>
+</aside>
+<main class="{% block main_class %}page{% endblock %}">
+{% block content %}{% endblock %}
+</main>
+<script>
+document.getElementById('nav-toggle').addEventListener('click', () => {
+  const on = document.documentElement.classList.toggle('nav-collapsed');
+  try { localStorage.setItem('nav-collapsed', on ? '1' : '0'); } catch (e) {}
+});
+</script>
+<script src="/static/pill.js?v={{ v }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

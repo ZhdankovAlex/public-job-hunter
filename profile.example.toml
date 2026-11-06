@@ -1,0 +1,145 @@
+# Профиль для оценки релевантности вакансий — пример для Python backend-разработчика.
+# Скопируйте в profile.toml (он в .gitignore) и поправьте под своё резюме; пока profile.toml нет,
+# программа читает этот файл.
+#
+# Балл вакансии = сумма весов совпавших навыков + поправки из [scoring].
+# pattern — регулярное выражение (без учёта регистра), ищется в названии и тексте вакансии.
+# Веса и выключение навыков можно менять и в веб-интерфейсе (страница «Навыки»): правки
+# сохраняются в profile_overrides.json, этот файл не меняется.
+
+[scoring]
+title_python = 5          # Python / Django / FastAPI в названии роли
+title_backend = 3         # Backend в названии
+title_database = 2        # PostgreSQL / Database в названии
+title_senior = 1          # Senior в названии
+title_product = 2         # продуктовая роль (Product Engineer и т.п.)
+title_platform = -3       # платформа / инфраструктура: допустимо, но ниже продукта
+outsourcing_text = -3     # "our client", "outstaffing", "staff augmentation" в тексте
+company_priority_per_point = 3  # за каждый балл приоритета компании (0–3) из companies.txt
+russian_language = 0      # русский в требованиях / «Russian-speaking team» / вакансия на русском
+location_remote_ok = 4    # ✅ remote без привязки к стране / домашняя страна ([home] в settings.toml)
+location_relocation = 2   # 🌍 подтверждённая релокация
+location_country = 1      # 🌍 без подтверждения / remote в целевой стране
+location_residents = -4   # ❌ только резиденты страны
+location_other_country = -3  # ❓ remote, привязанный к другой стране
+language_mismatch = -8    # основной язык не Python (Java, Ruby, …)
+go_required = -15         # Go / Golang как обязательный язык (вместо language_mismatch)
+jvm_spring = -10          # JVM / Java Virtual Machine / Spring в тексте
+years_8_plus = -5         # «8+ years», «10+ years» опыта
+penalty_experience_7 = -5   # требуют 7 лет опыта
+penalty_experience_8 = -5   # требуют 8+ лет (вдобавок к years_8_plus)
+penalty_level = -5          # Staff / Principal / Head / Director в названии
+penalty_ops_heavy = -5      # по тексту роль эксплуатационная (Terraform, Kubernetes, on-call…), а не продуктовая
+penalty_role = -8           # Data/Analytics Engineer, Data Scientist, Research, DevOps, SRE, Security
+cv_full_match = 6           # полное соответствие резюме (нет пробелов и несоответствий)
+cv_missing_each = -2        # за каждую требуемую технологию, которой нет в резюме
+cv_missing_cap = -10        # но не больше этого в сумме
+cv_mismatch_each = -3       # за несоответствие: опыт, уровень английского, образование, основной язык
+freehire_relocation = 3     # freehire: relocation = supported
+salary_eur_60k = 2          # зарплата в EUR от 60 000 в год
+local_language_nice = -1    # 🗣️ местный язык желателен
+not_english = -3            # текст вакансии не на английском (и не на русском)
+
+# --- Ядро -------------------------------------------------------------------------
+[[skills]]
+name = "Python"
+weight = 3
+pattern = '\bpython\b'
+
+[[skills]]
+name = "PostgreSQL"
+weight = 3
+pattern = '\bpostgres(?:ql)?\b|\bpsql\b'
+
+[[skills]]
+name = "Django"
+weight = 2
+pattern = '\bdjango\b'
+
+[[skills]]
+name = "Flask / FastAPI"
+weight = 2
+pattern = '\bflask\b|fastapi|starlette|\baiohttp\b|\basyncio\b'
+
+[[skills]]
+name = "Backend / API design"
+weight = 2
+pattern = '\brest(?:ful)?\b|api design|\bapis?\b|openapi|swagger|graphql|grpc'
+
+[[skills]]
+name = "Distributed systems"
+weight = 2
+pattern = 'distributed (?:systems?|architecture|services)|microservices?'
+
+# --- Данные и инфраструктура приложения ----------------------------------------------
+[[skills]]
+name = "SQL / query optimization"
+weight = 2
+pattern = '\bsql\b|n\+1|query (?:tuning|optimi[sz]ation)|indexing'
+
+[[skills]]
+name = "SQLAlchemy / ORM"
+weight = 1
+pattern = 'sqlalchemy|psycopg|alembic|\borm\b'
+
+[[skills]]
+name = "Redis"
+weight = 1
+pattern = '\bredis\b'
+
+[[skills]]
+name = "Message queues"
+weight = 2
+pattern = 'rabbitmq|\bkafka\b|\bamqp\b|message (?:queues?|brokers?)|event[\s-]driven|pub/?sub'
+
+[[skills]]
+name = "Background jobs"
+weight = 1
+pattern = 'background (?:jobs?|tasks?|processing)|celery|task queues?'
+
+[[skills]]
+name = "High-load / performance"
+weight = 1
+pattern = 'high[\s-]load|high[\s-]throughput|scalab\w+|low[\s-]latency'
+
+[[skills]]
+name = "Observability"
+weight = 1
+pattern = 'prometheus|grafana|opentelemetry|observability|monitoring'
+
+[[skills]]
+name = "Testing (pytest)"
+weight = 1
+pattern = 'pytest|unit tests?|test coverage|\btdd\b'
+
+# --- Инструменты -----------------------------------------------------------------
+[[skills]]
+name = "Docker"
+weight = 1
+pattern = '\bdocker\b|container\w*'
+
+[[skills]]
+name = "Kubernetes"
+weight = 1
+pattern = 'kubernetes|\bk8s\b|\bhelm\b'
+
+[[skills]]
+name = "CI/CD"
+weight = 1
+pattern = 'ci/cd|gitlab ci|github actions|jenkins'
+
+[[skills]]
+name = "AWS / GCP"
+weight = 1
+pattern = '\baws\b|\bs3\b|\bgcp\b|google cloud'
+
+[[skills]]
+name = "Linux"
+weight = 1
+pattern = '\blinux\b|\bbash\b'
+
+# --- AI -------------------------------------------------------------------------
+[[skills]]
+name = "LLM / RAG"
+weight = 1
+pattern = '\bllms?\b|\brag\b|retrieval[\s-]augmented|embeddings?|vector (?:search|database|store)'

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Резюме vs рынок · job-hunter{% endblock %}
+{% set where_text = {"pdf": "в резюме", "base": "только в базе", "": "нет"} %}
+{% block content %}
+<div class="table-head">
+  <h1>Резюме против рынка</h1>
+  {% if r.days %}
+  <form method="get" class="day-pick">
+    <label class="muted small">вакансии за
+      <select name="day" onchange="this.form.submit()">
+        {% for d in r.days %}<option value="{{ d }}" {{ 'selected' if d == r.day }}>{{ d }}</option>{% endfor %}
+      </select>
+    </label>
+  </form>
+  {% endif %}
+</div>
+<p class="muted">Локальный ATS-чекер: резюме сравнивается с подходящими вакансиями дня (backend, Python, software, AI по названию) —
+  не с абстрактным списком навыков. Ничего никуда не отправляется.</p>
+
+{% if not r.relevant %}
+<p class="card">Данных нет: нужен хотя бы один прогон с новой версией скрипта (тексты вакансий сохраняются в <code>state/jobs/</code>).</p>
+{% else %}
+<section class="tiles wide" style="--n: 4">
+  <div class="tile"><b>{{ r.relevant }}</b><span>подходящих вакансий из {{ r.total }}</span></div>
+  <div class="tile"><b>{{ r.fit.median }}%</b><span>медианный Fit резюме</span></div>
+  <div class="tile"><b>{{ r.fit.share80 }}%</b><span>вакансий с Fit ≥ 80%</span></div>
+  <div class="tile"><b>{{ r.keywords|selectattr("in_cv", "equalto", "pdf")|list|length }} / {{ r.keywords|length }}</b><span>частых технологий есть в резюме</span></div>
+</section>
+
+{% if r.advice %}
+<section class="card advice">
+  <h2>Что поправить</h2>
+  <ol>{% for a in r.advice %}<li>{{ a }}</li>{% endfor %}</ol>
+</section>
+{% endif %}
+
+<section class="grid two">
+  <div class="card">
+    <h2>Ключевые технологии рынка <span class="muted small">доля вакансий, где навык обязательный</span></h2>
+    <div class="legend small"><span class="dot pdf"></span>в PDF-резюме <span class="dot base"></span>только в базе
+      <span class="dot none"></span>нет <span class="dot partial"></span>частично</div>
+    {% for k in r.keywords %}
+    <div class="hbar kw {{ 'partial' if k.partial else (k.in_cv or 'none') }}" title="{{ k.count }} вакансий{% if k.partial %} · {{ k.partial }}{% endif %}">
+      <span class="hb-label">{{ k.name }}</span>
+      <span class="hb-track"><i style="width:{{ k.share }}%"></i></span>
+      <span class="hb-val">{{ k.share }}% · {{ "частично" if k.partial else where_text[k.in_cv] }}</span>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="col">
+    <div class="card">
+      <h2>Как называются вакансии</h2>
+      <p class="muted small">Заголовок резюме: {{ r.headline }}</p>
+      {% for t in r.titles %}
+      <div class="hbar {{ 'pdf' if t.in_headline else 'none' }} kw">
+        <span class="hb-label">{{ t.name }}</span>
+        <span class="hb-track"><i style="width:{{ t.share }}%"></i></span>
+        <span class="hb-val">{{ t.share }}% · {{ "в заголовке" if t.in_headline else "нет" }}</span>
+      </div>
+      {% endfor %}
+      <h2 class="sub-h">Грейд в названии</h2>
+      {% for t in r.seniority %}
+      <div class="hbar blue"><span class="hb-label">{{ t.name }}</span>
+        <span class="hb-track"><i style="width:{{ t.share }}%"></i></span><span class="hb-val">{{ t.share }}%</span></div>
+      {% endfor %}
+    </div>
+
+    <div class="card">
+      <h2>Гигиена резюме</h2>
+      {% set h = r.hygiene %}
+      <ul class="checks">
+        {% for name, pages in h.pages.items() %}
+        <li class="{{ 'ok' if pages == 1 else 'warn' }}">{{ '✔' if pages == 1 else '⚠' }} {{ name }}: {{ pages }} стр.</li>
+        {% endfor %}
+        <li class="{{ 'ok' if h.with_numbers == h.bullets else 'warn' }}">{{ '✔' if h.with_numbers == h.bullets else '⚠' }}
+          пункты с цифрами: {{ h.with_numbers }} из {{ h.bullets }}</li>
+        <li class="ok">• начинаются с глагола действия: {{ h.with_verb }} из {{ h.bullets }}</li>
+        <li class="{{ 'ok' if not h.long else 'warn' }}">{{ '✔' if not h.long else '⚠' }}
+          средняя длина пункта {{ h.avg_words }} слов{% if h.long %}, длинных: {{ h.long|length }}{% endif %}</li>
+        <li class="{{ 'ok' if not h.stop_words else 'warn' }}">{{ '✔' if not h.stop_words else '⚠' }}
+          слова-штампы{% if h.stop_words %}: {{ h.stop_words|join(", ") }}{% else %} не найдены{% endif %}</li>
+        <li class="{{ 'warn' if h.with_verb >= 0.8 * h.bullets else 'ok' }}">{{ '⚠' if h.with_verb >= 0.8 * h.bullets else '✔' }}
+          разная форма пунктов (не все с глагола)</li>
+        {% for job, n in h.numbers_by_job.items() %}
+        <li class="{{ 'warn' if n > 4 else 'ok' }}">{{ '⚠' if n > 4 else '✔' }} {{ job }}: пунктов с цифрами {{ n }}</li>
+        {% endfor %}
+        {% for name, ok in h.contacts.items() %}
+        <li class="{{ 'ok' if ok else 'warn' }}">{{ '✔' if ok else '⚠' }} {{ name }}</li>
+        {% endfor %}
+      </ul>
+      {% if h.no_numbers %}
+      <details><summary class="small">Пункты без цифр</summary>
+        <ul class="small">{% for b in h.no_numbers %}<li>{{ b }}</li>{% endfor %}</ul></details>
+      {% endif %}
+      {% if h.long %}
+      <details><summary class="small">Длинные пункты</summary>
+        <ul class="small">{% for b in h.long %}<li>{{ b }}</li>{% endfor %}</ul></details>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

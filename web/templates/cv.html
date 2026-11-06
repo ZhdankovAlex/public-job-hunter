@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Резюме · job-hunter{% endblock %}
+{% block content %}
+<h1>Резюме под вакансию</h1>
+<p class="muted">Пункты, навыки и Summary подбираются из <code>cv/base.toml</code> под текст вакансии — ничего не придумывается,
+  только отбор и порядок. Та же сборка — у кнопки «📄 CV» в отчёте.</p>
+
+<section class="grid two cv-grid">
+  <form class="card cv-form" id="cv-form">
+    <label>Ссылка на вакансию
+      <input name="url" type="url" placeholder="https://… — из отчёта или любая другая">
+    </label>
+    <div class="row2">
+      <label>Компания <input name="company" placeholder="если не определится сама"></label>
+      <label>Вакансия <input name="title" placeholder="название роли"></label>
+    </div>
+    <label>Или текст вакансии
+      <textarea name="text" rows="9" placeholder="Вставьте текст, если страница не читается (LinkedIn, закрытые сайты)"></textarea>
+    </label>
+    <div class="form-foot">
+      <label class="inline"><input type="checkbox" name="one_page"> на одну страницу</label>
+      <button class="primary" type="submit">📄 Собрать резюме</button>
+    </div>
+    <div class="muted small" id="cv-status"></div>
+  </form>
+
+  <div class="card" id="cv-result" hidden>
+    <div class="result-head">
+      <div><h2 id="r-title"></h2><div class="muted small" id="r-meta"></div></div>
+      <div class="actions"><a class="btn primary" id="r-pdf" target="_blank">Открыть PDF</a><a class="btn" id="r-md" target="_blank">Markdown</a></div>
+    </div>
+    <div id="r-missing"></div>
+    <h2 class="sub-h">Почему выбраны эти пункты</h2>
+    <ul class="picks" id="r-picks"></ul>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Собранные резюме <span class="muted small">{{ cvs|length }}</span></h2>
+  <table class="data">
+    <thead><tr><th>Резюме</th><th>Вариант</th><th>Собрано</th><th></th></tr></thead>
+    <tbody id="cv-list">
+      {% for c in cvs %}
+      <tr><td><a href="{{ c.pdf }}" target="_blank">{{ c.name }}</a></td>
+        <td class="small">{{ "1 страница" if c.one_page else "полное" }}</td>
+        <td class="small muted">{{ c.built }}</td>
+        <td class="small">{% if c.vacancy %}<a href="{{ c.vacancy }}" target="_blank" rel="noopener">вакансия ↗</a> · {% endif %}{% if c.md %}<a href="{{ c.md }}" target="_blank">md</a>{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/cv.js?v={{ v }}"></script>{% endblock %}

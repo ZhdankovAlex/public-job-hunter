@@ -1,0 +1,25 @@
+# Список компаний, чьи ATS-борды (Greenhouse, Lever, Ashby, Workable…) опрашиваются каждый прогон.
+# Скопируйте в companies.txt (он в .gitignore) и составьте свой; пока companies.txt нет,
+# программа читает этот файл.
+#
+# Формат: Компания | приоритет (0–3) | заметка
+# Строка без "|" — приоритет 0. Строки с "#" игнорируются.
+# Приоритет поднимает вакансии компании в отчёте (profile.toml → company_priority_per_point)
+# и рисует ★ рядом с названием. Если заметка начинается с VERIFY — она попадёт в отчёт.
+# Борд ищется по названию автоматически (slug), найденное кэшируется в ats_mapping.json.
+
+GitLab|2|all-remote
+Grafana Labs|2|remote-first
+PostHog|2|
+Supabase|1|
+Sentry|1|
+Cloudflare|1|
+Datadog|1|
+Elastic|1|
+Canonical|1|
+Stripe
+Spotify
+Vercel
+Zapier
+Wikimedia Foundation
+Mozilla

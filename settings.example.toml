@@ -1,0 +1,247 @@
+# Пример настроек. Скопируйте в settings.toml (он в .gitignore) и поправьте под себя;
+# пока settings.toml нет, программа читает этот файл.
+
+# Страны, куда рассматривается релокация / remote с привязкой к стране.
+# Порядок = порядок подразделов в отчёте.
+relocation_countries = ["Netherlands", "Germany", "Spain"]
+
+# Режим "any country": показывать ВСЕ вакансии с маркером релокации, в любой стране,
+# кроме перечисленных в exclude_countries (они попадут в подраздел "Other").
+# Релокация куда угодно, но только за счёт работодателя: вакансия в стране не из списка
+# показывается, если в тексте есть relocation package / support, visa sponsorship и т.п.
+any_country = true
+# Страны, вакансии в которых не показываются даже с оплаченной релокацией
+exclude_countries = []
+
+# Компании, где у вас есть знакомые для реферала — пометка "🤝 возможна рефка".
+referral_companies = []
+
+# Ссылки на вакансии, которые не нужно показывать (из любого источника).
+blocked_urls = []
+
+# Какие локации показывать. Всегда показываются: full-remote по миру / Европе
+# и любые вакансии в домашней стране ([home]).
+relocation_enabled = true      # раздел 🌍: релокация в страны из relocation_countries
+country_bound_remote = false   # true — показывать ❓ remote, привязанный к другой стране
+
+# Свежесть: вакансии старше стольких дней не показываются. Если даты публикации нет
+# (некоторые сайты и Telegram) — считается от дня, когда скрипт увидел её впервые.
+max_age_days = 60
+
+# Приоритетные компании: для них фильтр по названию роли мягче (любая инженерная роль
+# с python в тексте, кроме явных исключений) и не действует окно max_age_days —
+# их вакансии подолгу висят открытыми.
+priority_companies = []
+
+# Раздел «🎯 Топ по релевантности»: сколько строк и максимум вакансий одной компании.
+top_limit = 100
+top_per_company = 3
+
+# Компании, по которым в сводке всегда есть строка: найдено / прошло фильтры / борд не найден.
+must_report_companies = []
+
+# Вакансии компаний со статусом «Отказ» в откликах: false — показываются как обычно (можно
+# откликнуться снова), true — уходят в отдельный раздел «Ранее отказ» в конце отчёта.
+hide_previous_rejections = false
+
+# --- Где вы живёте и откуда работаете ---------------------------------------------------
+# Вакансии в домашней стране (офис, гибрид, remote) показываются наравне с remote по миру / Европе.
+# Пусто — показывается только remote без привязки к стране (и релокация, если включена).
+[home]
+country = ""        # например "Portugal"
+iso = ""            # ISO-код страны для поиска на Himalayas / freehire, например "PT"
+places = []         # города и другие написания: ["Lisbon", "Porto", "Lisboa"]
+
+# Города и альтернативные названия стран. Для новой страны добавьте сюда строку.
+[places]
+Netherlands = ["The Netherlands", "Holland", "Nederland", "Amsterdam", "Rotterdam", "Utrecht", "Eindhoven", "The Hague", "Den Haag"]
+Germany = ["Deutschland", "Berlin", "Munich", "München", "Hamburg", "Frankfurt", "Cologne", "Köln", "Düsseldorf", "Dusseldorf", "Stuttgart", "Leipzig"]
+Spain = ["España", "Madrid", "Barcelona", "Valencia", "Málaga", "Malaga", "Seville", "Sevilla"]
+
+# Компании, которые обычно перевозят: вакансия в целевой стране попадает в 🌍
+# даже без маркера релокации в тексте — с пометкой "(релокация не подтверждена)".
+[relocation_companies]
+Netherlands = ["Booking.com", "Adyen", "Picnic", "Mollie", "Elastic"]
+Germany = ["Zalando", "Delivery Hero", "N26", "Celonis", "HelloFresh", "GetYourGuide"]
+Spain = ["Glovo", "Travelperk", "Factorial", "Cabify"]
+
+# Ручное указание ATS-борда. Если greenhouse_board_token задан, скрипт берёт вакансии
+# с https://boards-api.greenhouse.io/v1/boards/<token>/jobs и не подбирает slug сам.
+# [ats_overrides."Example Corp"]
+# greenhouse_board_token = "examplecorp"
+
+# --- Фильтры по рынку ----------------------------------------------------------------------
+[filters]
+# true — скрывать вакансии, где remote возможен только из России («на территории РФ»);
+# встречается в русскоязычных источниках (Telegram, Habr Career).
+hide_russia_only = false
+
+# --- Источники-сайты (jobhunter/sites.py): какие не опрашивать ---------------------------------
+[sources]
+# Имена — как в sites.SOURCES / на странице «Источники». По умолчанию выключены русскоязычные
+# площадки и адаптеры сайтов отдельных компаний (примеры, как подключить сайт без ATS);
+# уберите имя из списка, чтобы опрашивать источник.
+disabled = ["habr career", "hirehi", "aiven", "bolt", "fin.dev", "gurtam", "rivian", "01.tech"]
+
+# --- freehire.me: основной источник (https://freehire.me/docs/api) -----------------
+[freehire]
+enabled = true
+max_requests = 20          # сетевых запросов за прогон
+cache_hours = 6            # кэш ответов на диске (state/freehire_cache)
+pages_per_query = 3        # страниц по 100 вакансий на запрос
+max_experience_years = 15  # не отсекать заранее: 8+ лет — штраф к баллу, а не скрытие
+descriptions_top = 200     # для скольких вакансий запрашивать полный текст (в пределах max_requests)
+
+# Параметры, общие для всех запросов. Имена — как в документации API; если API
+# отбросит параметр (meta.ignored_params), прогон остановится с ошибкой.
+[freehire.common]
+skills = "python"
+seniority = "middle,senior"
+company_type_exclude = "outstaff,outsource,agency"
+posting_language = "en"
+reality = "fresh"
+
+[[freehire.queries]]
+name = "A"
+title = "Remote"
+category = "backend,software_engineering,ai_engineering"
+work_mode = "remote"
+regions = "global,eu"
+open_within_days = 14
+
+[[freehire.queries]]
+name = "B"
+title = "Релокация"
+requires_relocation = true     # запрос выполняется только при relocation_enabled = true
+relocation = "supported"       # любая страна, но с помощью в релокации
+open_within_days = 30
+
+# Вакансии в домашней стране: countries — ISO-код из [home].iso в нижнем регистре
+# [[freehire.queries]]
+# name = "C"
+# title = "Домашняя страна"
+# countries = "pt"
+# open_within_days = 30
+
+# --- Дополнительные доски вакансий (jobhunter/sites.py) -----------------------------
+[boards]
+# Remote Rocketship: адрес поиска как в браузере (без page=), страниц по 20 вакансий
+remoterocketship_url = "https://www.remoterocketship.com/remote-jobs/?sort=DateAdded&techStack=Python&seniority=mid%2Csenior&keywords=python&showHybridJobs=true&showOnsiteJobs=true"
+remoterocketship_pages = 5
+# Brenxor: страниц списка и максимум открываемых страниц вакансий за прогон
+brenxor_url = "https://brenxor.com/remote-python-developer-jobs"
+brenxor_pages = 4
+brenxor_max_details = 40
+# justjoin.it: одна страница (50 вакансий) с фильтрами в адресе
+justjoin_url = "https://justjoin.it/job-offers/all-locations/python?workplace=remote&experience-level=mid,senior"
+# remote.com: поисковый запрос и число страниц по 20 вакансий
+remotecom_query = "python"
+remotecom_pages = 3
+
+# --- Крупные компании (jobhunter/bigtech.py): их собственные карьерные сайты ---------------
+# Вакансия в чужой стране попадает в отчёт только с оплаченной релокацией (маркер в тексте),
+# домашняя страна (в т.ч. офис) и remote — как обычно. Если [home].country задан, у Microsoft
+# дополнительно ищутся вакансии в этой стране.
+[bigtech]
+queries = ["python", "backend"]
+pages = 3                   # страниц поиска на запрос
+details_per_company = 60    # сколько вакансий открывать целиком (домашняя страна и remote — первыми)
+# компании с обычных ATS (Greenhouse и т.п.), которые тоже обычно перевозят сами
+companies = []
+# Страны, куда крупные компании обычно перевозят: их вакансии здесь идут в 🌍 как «релокация
+# (не подтверждена)», даже если в тексте нет маркера.
+relocation_hubs = [
+    "United States", "USA", "US", "Canada", "United Kingdom", "UK", "Ireland", "Netherlands", "Germany",
+    "Switzerland", "Denmark", "Sweden", "Norway", "Finland", "France", "Belgium", "Austria", "Spain",
+    "Portugal", "Poland", "Czech Republic", "Czechia", "Estonia", "Israel", "Japan", "Singapore",
+    "Australia", "United Arab Emirates", "Dubai",
+    # Amazon пишет страну кодом ISO-3
+    "CAN", "GBR", "IRL", "NLD", "DEU", "CHE", "DNK", "SWE", "FRA", "ESP", "PRT", "POL", "CZE",
+    "ISR", "JPN", "SGP", "AUS", "ARE",
+]
+# Workday: [компания, хост до .myworkdayjobs.com, tenant, сайт]
+workday = [
+    ["NVIDIA", "nvidia.wd5", "nvidia", "NVIDIAExternalCareerSite"],
+    ["Salesforce", "salesforce.wd12", "salesforce", "External_Career_Site"],
+    ["Adobe", "adobe.wd5", "adobe", "external_experienced"],
+]
+
+# --- Отдельные вакансии, найденные руками (sites.manual_jobs): открываются каждый прогон -------
+# и идут в отчёт с теми же фильтрами, Fit и статусом отклика. Источник в отчёте — «вручную».
+[manual_jobs]
+urls = []
+
+# --- Карьерные страницы без ATS (sites.career_page): компания = ссылка или { url, location } --
+# Компания должна быть в companies.txt. Работает, только если список вакансий есть в HTML
+# (сайты, которые строят список скриптами, ничего не отдадут). location — метка по умолчанию,
+# если на странице вакансии нет ни Remote, ни домашней страны.
+[career_pages]
+# "Example Corp" = { url = "https://example.com/careers", location = "Remote" }
+
+# --- Telegram-каналы с вакансиями (веб-превью t.me/s/<канал>) ---------------------------------
+# Выключено по умолчанию. Для каналов из PARSERS в jobhunter/telegram.py есть свой разбор постов,
+# остальные читаются общим разбором. Список ниже — пример русскоязычных каналов с Python-вакансиями.
+[telegram]
+enabled = false
+channels = ["pythonrabota", "job_python", "relocatesme"]
+cis_channels = ["pythonrabota", "job_python"]   # вилки этих каналов — отдельная группа в базе зарплат
+max_age_days = 60
+aggregator_hosts = []   # сайты-агрегаторы из ссылок в постах: у таких ссылок проверяется, что вакансия жива
+
+# --- Зарплатные вилки (jobhunter/salary.py) ------------------------------------------
+[salary]
+# Порог по деньгам, EUR/мес: вакансии, где в тексте ЯВНО указана вилка целиком ниже порога,
+# опускаются вниз внутри категории и скрываются фильтром «💶 Вилка ≥ …» в отчёте.
+# Оценка по базе и levels.fyi не учитываются — только вилка из вакансии. 0 — порога нет.
+min_monthly_eur = 0
+
+# курсы для приведения к EUR
+[salary.rates_to_eur]
+USD = 0.92
+GBP = 1.17
+PLN = 0.23
+RUB = 0.0095
+
+# --- Резюме для сопоставления с вакансиями (jobhunter/cv_match.py) --------------------
+# Первое резюме предлагается для AI/ML-вакансий, второе — для остальных. PDF-файлы — в cv/
+# (cv/*.pdf в .gitignore). Нет файлов — сопоставление идёт по cv/base.toml.
+[cv]
+files = [
+  "cv/My_Backend_AI_CV.pdf",
+  "cv/My_Backend_CV.pdf",
+]
+names = ["Backend + AI", "Backend"]
+# о вас — для «несоответствий» в сопоставлении с вакансией
+years_experience = 0          # лет опыта: вакансия, где требуют больше, получает пометку (0 — не сравнивать)
+english_level = ""            # например "B2": просьба о C1+ — оговорка в «Соответствии резюме»
+has_masters_or_phd = false    # false — «нужен магистр / PhD» считается несоответствием
+# автосборка резюме под новые вакансии с высоким Fit (cvgen.auto_build) — выключена: резюме собирается
+# по кнопке «📄 CV» в отчёте или на странице «Резюме» веб-интерфейса, под любую вакансию.
+auto_fit_min = 80   # минимальный Fit, %
+auto_max = 0        # не больше стольких резюме за прогон (0 — автосборка выключена)
+
+# навыки, которые есть, но частично: не пробел, а оговорка в «Соответствии резюме»
+[cv.partial]
+# AWS = "только S3"
+
+# --- Черновики сообщений рекрутеру и инженеру (jobhunter/outreach.py) -----------------------
+[outreach]
+pitch = "Backend Engineer with Python and PostgreSQL experience"  # «I'm a …» в черновике
+based_in = ""   # например "Based in Portugal (WET)."; пусто — из [home].country
+
+# --- Статусы откликов из почты (applications.py -> reports/applications.html) ----------------
+[mail]
+# какие письма читать (синтаксис поиска Gmail); доступ только на чтение
+query = "newer_than:365d -in:sent -in:chats -in:spam -in:trash"
+# без ответа дольше стольких дней после отклика или этапа — считаем отказом (🔴 «отказ (тишина)»)
+timeout_days = 14
+# отправители, чьи письма не про отклики (рассылки, подборки вакансий)
+ignore_senders = ["jobalerts-noreply@linkedin.com", "newsletters-noreply@linkedin.com", "notifications-noreply@linkedin.com"]
+# ваше имя, как оно бывает в отправителе / подписи: не путать с названием компании
+own_names = []
+# часовой пояс для дат без времени в applications_manual.toml, часы от UTC
+utc_offset_hours = 0
+
+# написание компании в письмах -> как показывать (если ATS пишет юрлицо или домен)
+[mail.company_aliases]
+"Example Global Limited" = "Example"

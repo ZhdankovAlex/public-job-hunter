@@ -1,0 +1,19 @@
+# Аутстаф / аутсорс / посредники: не показываются в основном отчёте,
+# выносятся в Appendix «Staffing/outsourcing».
+# Скопируйте в staffing_blacklist.txt (он в .gitignore), чтобы вести свой список.
+#
+# Одна компания на строку (регистр, пробелы и пунктуация не важны).
+# Строка "re: <regex>" — шаблон по названию компании (без учёта регистра).
+# Вакансии с "Contract" в названии роли попадают туда же автоматически.
+
+# площадки-посредники (примеры)
+Toptal
+Turing
+Andela
+BairesDev
+Proxify
+lemon.io
+Crossover
+
+# компания "выглядит как посредник"
+re: \b(talents?|staffing|recruit\w*|outstaff\w*|outsourc\w*|headhunt\w*)\b

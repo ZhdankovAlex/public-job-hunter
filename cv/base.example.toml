@@ -1,0 +1,104 @@
+# Пример базы резюме. Скопируйте в cv/base.toml (он в .gitignore) и замените своими фактами;
+# пока cv/base.toml нет, генератор резюме и подготовка к интервью читают этот файл.
+# Генератор ничего не придумывает — только отбирает и переставляет то, что здесь написано.
+#
+# topics — темы пункта для подбора под вакансию (список тем — jobhunter/cvgen.py, TOPICS);
+# технологии из текста пункта определяются сами (словарь cv_match.TECH_RX).
+# pin = true — пункт есть в любой версии резюме.
+
+name = "JANE DOE"
+contacts = "jane.doe@example.com · +000 00 000 0000 · Central European Time (CET/CEST)"
+links = [
+  ["github.com/example", "https://github.com/example"],
+]
+
+# Технологии, которые всегда видны в строке стека места работы (остальные — если их просит вакансия)
+core_tech = ["Python", "PostgreSQL", "Docker"]
+# Технологии только для AI-версии резюме (в backend-версии строки стека их нет)
+ai_only_tech = ["ChromaDB"]
+
+# Заголовок под именем: ai — для AI / LLM-вакансий, backend — для остальных.
+# Если вакансия называется иначе (Python Developer, Software Engineer), роль в заголовке подстраивается,
+# уровень (Senior, Lead…) сохраняется.
+[headline]
+backend = "Senior Backend Engineer | Python · PostgreSQL"
+ai = "Senior Backend Engineer | Python · PostgreSQL · LLM / RAG"
+
+# Summary = intro + 2–3 достижения, ближе всего подходящие вакансии + closing
+[summary]
+intro = "Backend engineer with 5 years building services in Python and PostgreSQL."
+closing = "Enjoys owning features end to end, from design to production support."
+max_achievements = 3
+
+[[summary.achievements]]
+pin = true
+text = "Designed a job-processing service handling 1M tasks a day."
+topics = ["distributed", "highload"]
+
+[[summary.achievements]]
+text = "Cut API p95 latency from 800 ms to 120 ms by fixing N+1 queries."
+topics = ["performance", "sql", "api"]
+
+[[summary.achievements]]
+text = "Built a retrieval layer for an internal RAG assistant."
+summary_for = ["ai"]
+requires = ["ai_tools", "llm"]
+topics = ["llm"]
+
+[[skills]]
+group = "Languages and frameworks"
+items = [
+  { text = "Python", always = true },
+  { text = "FastAPI", always = true },
+  { text = "Django" },
+]
+
+[[skills]]
+group = "Data and messaging"
+items = [
+  { text = "PostgreSQL", always = true },
+  { text = "Redis" },
+  { text = "Kafka" },
+]
+
+# Опыт: bullets_max — сколько пунктов оставлять (pin + самые подходящие вакансии)
+[[experience]]
+title = "Backend Engineer"
+company = "Example Corp"
+dates = "Jan 2022 – Present"
+bullets_max = 4
+intro = ["Product company, team of 6 engineers."]
+tech = ["Python", "FastAPI", "PostgreSQL", "Redis", "Docker"]
+
+[[experience.bullets]]
+pin = true
+text = "**Designed a job-processing service** on PostgreSQL and Redis handling 1M tasks a day."
+topics = ["distributed", "highload"]
+
+[[experience.bullets]]
+text = "**Cut API p95 latency from 800 ms to 120 ms** by eliminating N+1 queries."
+topics = ["performance", "sql", "api"]
+
+[publications]
+text = ""
+
+[education]
+degree = "B.Sc. in Computer Science"
+years = "2016 – 2020"
+school = "Example University"
+
+[languages]
+text = "English — C1"
+
+# --- Банк историй для поведенческих вопросов (jobhunter/interview_prep.py) ---
+# Только факты из пунктов опыта выше: ситуация → действие → результат.
+# questions: initiative | early_detection | pushback | research | incident | ownership
+# draft = true — черновик, проверить формулировки.
+
+[[stories]]
+title = "Latency fix"
+questions = ["initiative"]
+topics = ["performance"]
+situation = "The main API endpoint was slow under load."
+action = "Profiled queries, removed N+1 patterns and added an index."
+result = "p95 latency dropped from 800 ms to 120 ms."
