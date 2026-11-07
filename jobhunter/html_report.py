@@ -161,6 +161,8 @@ def _cv_link(job, day: date) -> str:
            f'title="Резюме на одну страницу">1 стр.</a>')
     if getattr(job, "cv_file", ""):
         out += f'<a class="tag" href="../{_e(job.cv_file)}" target="_blank" title="собрано автоматически">📄 готовое</a>'
+    out += (f'<a class="tag cv" href="{WEB_URL}/cover?{_e(query)}" target="_blank" '
+            f'title="Сопроводительное письмо под эту вакансию (стиль — на странице)">✉️</a>')
     out += (f'<a class="tag cv" href="{WEB_URL}/prep?url={quote(link, safe="")}&amp;date={day.isoformat()}" '
             f'target="_blank" title="Подготовка к интервью: что сказать, истории, вопросы">🎤</a>')
     applied = f"company={quote(job.company or '', safe='')}&title={quote(job.title or '', safe='')}&url={quote(link, safe='')}"

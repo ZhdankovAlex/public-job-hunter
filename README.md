@@ -22,6 +22,7 @@ countries, sources — is configured in plain TOML files.
   country median from [levels.fyi](https://www.levels.fyi).
 - **Tracks applications** from Gmail (read-only) plus manual events (Telegram, LinkedIn, calls).
 - **Builds a CV** for any vacancy from your own facts (`cv/base.toml`) — selects and orders, never invents.
+- **Writes a cover letter** for a vacancy from the same facts: short and bulleted, or full in paragraphs.
 - **Prepares for interviews**: requirements matched to your experience, gaps, stories for behavioural
   questions, an HR call checklist.
 
@@ -50,6 +51,8 @@ The UI is in Russian.
 | Interview preparation | CV vs market |
 | ![Skills](docs/img/skills.png) | ![Sources](docs/img/sources.png) |
 | Profile skills and their weights | Sources of the last run |
+| ![Cover letter](docs/img/cover.png) | |
+| A cover letter for a vacancy and why each point was picked | |
 
 ## Quick start
 
@@ -83,7 +86,8 @@ copy profile.example.toml profile.toml
 copy cv\base.example.toml cv\base.toml
 ```
 
-Start the web UI (`http://127.0.0.1:8765/`) and press "run" on the Pipeline page:
+Start the web UI (`http://127.0.0.1:8765/`) and press "run" on the Pipeline page (a running run can be
+skipped stage by stage or stopped entirely with "⏹ Остановить прогон"):
 
 ```bash
 .venv\Scripts\python.exe -m web
@@ -129,8 +133,8 @@ Daily runs via Task Scheduler / cron or Docker: [docs/pipeline.md](docs/pipeline
 | [docs/sources.md](docs/sources.md) | ATS boards, freehire, aggregators, career pages, Telegram, fixing `ats_mapping.json` |
 | [docs/filters.md](docs/filters.md) | Filters, full-text checks, home country and relocation, languages, staffing |
 | [docs/scoring.md](docs/scoring.md) | Report layout, categories, score and skills, Fit %, salaries and levels.fyi |
-| [docs/cv.md](docs/cv.md) | CV generator for a vacancy, one-page version |
-| [docs/applications.md](docs/applications.md) | Application statuses from mail and manual events |
+| [docs/cv.md](docs/cv.md) | CV generator for a vacancy, one-page version, cover letters |
+| [docs/applications.md](docs/applications.md) | Application statuses from mail and manual events, the funnel |
 | [docs/outreach.md](docs/outreach.md) | Contacts at the company and message drafts |
 | [docs/interview-prep.md](docs/interview-prep.md) | Interview preparation for a vacancy |
 | [docs/market-check.md](docs/market-check.md) | CV vs market: a local ATS checker |

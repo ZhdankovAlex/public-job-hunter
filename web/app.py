@@ -23,7 +23,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from jobhunter import config, cvgen, interview_prep, manual_apps, market_check, progress, relevance, vacancy_lookup
+from jobhunter import config, cover_letter, cvgen, interview_prep, manual_apps, market_check, progress, relevance, vacancy_lookup
 
 ROOT = config.ROOT
 WEB = Path(__file__).parent
@@ -50,7 +50,7 @@ app.mount("/files/cv_out", StaticFiles(directory=ROOT / "cv_out"), name="cv_out"
 # (ключ, подпись, иконка) — иконка видна и в свёрнутой левой панели
 # (адрес, подпись, эмодзи-иконка; те же значки, что у кнопок отчёта: 📬 отклики, 📄 CV, 🎤 подготовка)
 NAV = [("pipeline", "Пайплайн", "⚙️"), ("reports", "Отчёты", "📋"), ("applications", "Отклики", "📬"),
-       ("cv", "Резюме", "📄"), ("prep", "Подготовка", "🎤"), ("market", "Резюме vs рынок", "⚖️"),
+       ("cv", "Резюме", "📄"), ("cover", "Письмо", "✉️"), ("prep", "Подготовка", "🎤"), ("market", "Резюме vs рынок", "⚖️"),
        ("skills", "Навыки", "🛠️"), ("sources", "Источники", "🌐")]
 
 
@@ -72,6 +72,7 @@ class Runner:
         self.process: subprocess.Popen | None = None
         self.thread: threading.Thread | None = None
         self.queue: list[str] = []
+        self.stopping = False
 
     def busy(self) -> bool:
         """Идёт ли прогон: запущенный отсюда или из терминала / Планировщика."""
@@ -91,6 +92,7 @@ class Runner:
             flags = [self.SKIP_FLAGS[k] for k in skip if k in self.SKIP_FLAGS]
             commands = [[s, *flags] if s == "main.py" else [s] for s in scripts]
             self.queue = [" ".join(c) for c in commands]
+            self.stopping = False
             self.thread = threading.Thread(target=self._run, args=(commands,), daemon=True)
             self.thread.start()
             return list(self.queue)
@@ -99,7 +101,7 @@ class Runner:
         python = ROOT / ".venv" / "Scripts" / "python.exe"
         python = python if python.exists() else Path(sys.executable)
         with RUN_LOG.open("a", encoding="utf-8") as log:
-            for command in commands:
+            for i, command in enumerate(commands):
                 log.write(f"\n=== {datetime.now():%Y-%m-%d %H:%M:%S} {' '.join(command)} (запуск из веб-интерфейса) ===\n")
                 log.flush()
                 # отдельная группа процессов: Ctrl+C в окне сервера не прерывает идущий прогон.
@@ -108,12 +110,41 @@ class Runner:
                 detached = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
                 self.process = subprocess.Popen(
                     [str(python), *command], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
-                    env={**os.environ, "PYTHONIOENCODING": "utf-8"}, creationflags=detached,
+                    env={**os.environ, "PYTHONIOENCODING": "utf-8", **({progress.CONTINUE_RUN_ENV: "1"} if i else {})},
+                    creationflags=detached,
                     start_new_session=sys.platform != "win32",
                 )
                 self.process.wait()
                 self.queue.pop(0)
+                if self.stopping:  # «Остановить прогон»: следующие скрипты очереди не запускаем
+                    log.write(f"=== {datetime.now():%Y-%m-%d %H:%M:%S} остановлено из веб-интерфейса ===\n")
+                    break
+        self.queue = []
         self.process = None
+
+    def stop(self) -> int:
+        """Полная остановка: очередь сбрасывается, идущий скрипт завершается вместе с дочерними процессами.
+
+        Работает и для прогона из терминала / Планировщика (pid из progress.json). -> pid остановленного.
+        Собранное в этом прогоне не сохраняется: отчёты остаются от прошлого прогона.
+        """
+        with self.lock:
+            data = progress.read()
+            pid = self.process.pid if self.process and self.process.poll() is None else None
+            if pid is None and data and progress.is_alive(data):
+                pid = data["pid"]
+            if pid is None:
+                raise HTTPException(409, "Прогон не идёт")
+            self.stopping = True
+            if sys.platform == "win32":
+                subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
+            else:
+                import signal
+                try:
+                    os.killpg(pid, signal.SIGTERM)  # start_new_session: группа = pid
+                except OSError:
+                    os.kill(pid, signal.SIGTERM)
+            return pid
 
 
 runner = Runner()
@@ -293,6 +324,11 @@ def cv_page(request: Request):
     return page(request, "cv", cvs=recent_cvs())
 
 
+@app.get("/cover", response_class=HTMLResponse, include_in_schema=False)
+def cover_page(request: Request):
+    return page(request, "cover")
+
+
 _market_cache: dict[tuple, dict] = {}
 
 
@@ -379,6 +415,13 @@ def api_skip(body: SkipRequest):
     return {"stage": body.stage}
 
 
+@app.post("/api/runs/current/stop", status_code=202, summary="Остановить прогон целиком",
+          description="Завершает идущий скрипт и не запускает следующие в очереди (прогон «всё»: почта, потом "
+                      "вакансии). Собранное в этом прогоне теряется — отчёты остаются от прошлого. 409 — прогона нет.")
+def api_stop():
+    return {"pid": runner.stop()}
+
+
 @app.get("/api/reports", summary="Список отчётов",
          description="Отчёты reports/jobs_YYYY-MM-DD.html, новые сверху. Открыть: /files/reports/<file>.")
 def api_reports():
@@ -460,6 +503,22 @@ def api_cv(body: CvRequest):
         one_page=body.one_page, fit=result["fit"], missing=result["missing"], techs=result["techs"],
         topics=result["topics"], picks=result["picks"],
     )
+
+
+class CoverRequest(CvRequest):
+    style: Literal["short", "full"] = Field("short", description="short — тезисно, full — абзацами")
+
+
+@app.post("/api/cover", summary="Сопроводительное письмо под вакансию",
+          description="Из cv/base.toml ([summary] — достижения, [cover] — шаблон и soft skills) под текст вакансии; "
+                      "ничего не придумывает. Сохраняется в cv_out/<дата>/…_cover_<стиль>.txt. "
+                      "Вакансия — как у /api/cv (ссылка или текст).")
+def api_cover(body: CoverRequest):
+    job = resolve_job(body)
+    result = cover_letter.build(body.company or job.get("company") or "Company",
+                                body.title or job.get("title") or "Vacancy", job["text"], body.style)
+    path = cover_letter.save(result, job.get("url", ""))
+    return {**result, "source": job.get("found_in", ""), "file": f"/files/{path.relative_to(ROOT).as_posix()}"}
 
 
 @app.get("/api/cv", summary="Собранные резюме", description="PDF из cv_out/, новые сверху (до 40).")
@@ -596,6 +655,25 @@ def prep_page(request: Request, url: str = "", date: str = ""):
         except HTTPException as e:
             error = e.detail
     return page(request, "prep", r=result, error=error, url=url)
+
+
+@app.post("/prep", response_class=HTMLResponse, include_in_schema=False)
+async def prep_page_text(request: Request):
+    """Подготовка по вставленному тексту — для вакансий без ссылки (PDF от рекрутера, переписка).
+
+    Форма разбирается вручную (urlencoded): python-multipart для неё не нужен."""
+    from urllib.parse import parse_qs
+
+    form = {k: v[0] for k, v in parse_qs((await request.body()).decode("utf-8")).items()}
+    text = form.get("text", "").strip()
+    result, error = None, ""
+    if text:
+        result = interview_prep.build(form.get("company", "").strip() or "Company",
+                                      form.get("title", "").strip() or "Vacancy", text, form.get("location", "").strip())
+        result["url"] = ""
+    else:
+        error = "Вставьте текст вакансии"
+    return page(request, "prep", r=result, error=error, url="", form=form)
 
 
 @app.post("/api/prep", summary="Подготовка к интервью",

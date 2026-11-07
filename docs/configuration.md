@@ -19,7 +19,7 @@
 | `settings.toml` | Almost everything: home country, locations and relocation, freehire queries, sources, Telegram, `[manual_jobs]`, mail company aliases, career pages, thresholds |
 | `companies.txt` | Companies to check: `Company \| priority 0–3 \| note` |
 | `profile.toml` | Profile for the relevance score: skills with weights and patterns, adjustments |
-| `cv/base.toml` | The CV base: experience, projects, skills, interview stories — every CV is built from it |
+| `cv/base.toml` | The CV base: experience, projects, skills, interview stories, cover letter template — every CV and letter is built from it |
 | `applications_manual.toml` | Applications not from mail (Telegram, LinkedIn, calls): events per company |
 | `staffing_blacklist.txt` | Staffing / outsourcing companies — moved to a separate report appendix |
 | `ats_mapping.json` | Cache company → ATS and slug, created automatically; can be edited (see [sources.md](sources.md)) |
@@ -87,6 +87,7 @@ All keys are commented in `settings.example.toml`.
 | `mail.py`, `applications_report.py` | Gmail (read-only), letter parsing, the applications page |
 | `cv_match.py`, `relevance.py`, `tiers.py`, `salary.py`, `levels.py` | Fit % to the CV, score, category, grade, salary ranges, levels.fyi |
 | `cvgen.py` | CV builder: picks bullets for a vacancy, one-page version, Markdown → HTML → PDF via headless Chrome |
+| `cover_letter.py` | Cover letter for a vacancy from `cv/base.toml` (`[summary]`, `[cover]`) |
 | `vacancy_lookup.py` | A vacancy by link: from saved reports or from the page (JobPosting) |
 | `outreach.py` | LinkedIn people-search links, contacts from the text, message drafts |
 | `interview_prep.py`, `market_check.py` | Interview preparation, CV vs market |
@@ -110,5 +111,5 @@ All keys are commented in `settings.example.toml`.
 | `salary_samples.json`, `levels_cache.json` | Salary ranges base, levels.fyi cache |
 | `cv_text.json` | CV text for matching |
 
-`reports/`, `cv_out/`, `errors.log`, `last_run.log` are run results; they can be deleted, the next run
-rebuilds them.
+`reports/`, `cv_out/`, `errors.log`, `errors.prev.log`, `last_run.log` are run results; they can be deleted, the
+next run rebuilds them.

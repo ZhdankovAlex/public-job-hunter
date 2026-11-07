@@ -18,9 +18,12 @@ STAGES = [
 
 
 def main() -> None:
+    progress.rotate_errors_log()
+    errors = logging.FileHandler(config.ERRORS_LOG, encoding="utf-8")
+    errors.setLevel(logging.WARNING)  # в errors.log — только предупреждения и ошибки, как у main.py
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
-        handlers=[progress.ConsoleHandler(), logging.FileHandler(config.ERRORS_LOG, encoding="utf-8")],
+        handlers=[progress.ConsoleHandler(), errors],
     )
     pipeline = progress.Pipeline("applications", STAGES, skippable={"mail"})
     try:

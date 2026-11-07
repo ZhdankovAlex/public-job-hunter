@@ -2,6 +2,7 @@
 import argparse
 import json
 import logging
+import re
 import sys
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -11,7 +12,7 @@ from jobhunter import (aggregators, applied, config, filters, freehire, geo, htm
                        telegram, verify)
 from jobhunter.ats import PLATFORMS, AtsClient
 from jobhunter.companies import load_companies
-from jobhunter.http import Http
+from jobhunter.http import Http, cancel as http_cancel
 from jobhunter.models import norm_name
 from jobhunter.relevance import Profile
 from jobhunter import salary as salary_rules
@@ -49,6 +50,7 @@ def setup_logging():
     fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s", "%Y-%m-%d %H:%M:%S")
     console = progress.ConsoleHandler(sys.stdout)  # печатает лог над строкой прогресса
     console.setFormatter(fmt)
+    progress.rotate_errors_log()
     errors = logging.FileHandler(config.ERRORS_LOG, encoding="utf-8")
     errors.setLevel(logging.WARNING)
     errors.setFormatter(fmt)
@@ -94,6 +96,7 @@ def collect(args, companies, http, ats, career_pages=()):
             for done, future in enumerate(as_completed(futures), 1):
                 if progress.skip_requested():  # кнопка «Пропустить»: недоделанные источники отменяются
                     log.warning("Источники: пропуск по кнопке, обработано %d из %d", done - 1, len(futures))
+                    http_cancel.set()  # идущие запросы обрываются, пул не ждёт долгие карьерные страницы
                     break
                 name = futures[future]
                 try:
@@ -110,6 +113,7 @@ def collect(args, companies, http, ats, career_pages=()):
                     log.info("Обработано источников: %d/%d", done, len(futures))
         finally:
             pool.shutdown(cancel_futures=True)
+            http_cancel.clear()
             ats.save()
             for name, entry in results.items():
                 entry.update((ats.mapping.get(name) or {}) if entry["kind"] == "ats" else {})
@@ -240,6 +244,53 @@ def enrich_from_ats(tg_jobs, ats):
     return filled
 
 
+# Сколько НОВЫХ компаний из Telegram-постов без полного текста искать на ATS-бордах за прогон: поиск борда — до
+# десятка запросов на компанию (Workable — раз в 6 с); результат, и «не найдено» тоже, кэшируется в
+# ats_mapping.json, поэтому известные компании в лимит не входят и следующие прогоны идут быстро
+TG_BOARD_LOOKUPS = 25
+
+
+def _title_key(title: str) -> str:
+    return re.sub(r"[^a-z0-9а-яё]+", " ", title.lower()).strip()
+
+
+_TG_BOARD_CACHE: dict[str, list] = {}  # компания -> вакансии её борда (в пределах прогона)
+
+
+def _enrich_from_company_boards(tg_jobs, ats, lookups: dict | None = None) -> int:
+    """Пост без полного текста (дайджест со ссылкой на агрегатор, например wantapply.com, — у него защита от
+    ботов) -> ищем борд компании (Greenhouse/Lever/Ashby/Workable) и берём текст вакансии с тем же названием.
+    Так видны требования, которых нет в посте: офис, язык, опыт."""
+    from jobhunter.models import Company
+
+    filled, looked = 0, _TG_BOARD_CACHE
+    lookups = lookups if lookups is not None else {"new": 0}
+    for job in tg_jobs:
+        if job.full_text or not job.company or not filters.title_candidate(job.title):
+            continue
+        name = job.company.strip()
+        if name not in looked:
+            if name not in ats.mapping:
+                if lookups["new"] >= TG_BOARD_LOOKUPS:
+                    continue
+                lookups["new"] += 1
+            try:
+                # quiet: «борд не найден» для компании из поста — норма, а не повод что-то делать
+                looked[name] = ats.jobs_for(Company(name), quiet=True) or []
+            except Exception as e:  # сеть, формат — пост останется с текстом из Telegram
+                log.warning("telegram: борд %s не прочитан (%s)", name, e)
+                looked[name] = []
+        key = _title_key(job.title)
+        twin = next((b for b in looked[name] if b.description and _title_key(b.title) == key), None)
+        if twin:
+            job.text = twin.description
+            job.full_text = True
+            if twin.location and not job.location:
+                job.location = twin.location
+            filled += 1
+    return filled
+
+
 def merge_duplicates(jobs):
     """Одна вакансия (компания + название) в нескольких локациях -> одна строка."""
     merged = {}
@@ -314,6 +365,10 @@ def run(args):
         if name in by_name:
             page = page if isinstance(page, dict) else {"url": page}
             career_pages.append((by_name[name], page["url"], page.get("location", "")))
+    # аутсорс (staffing_blacklist.txt) по карьерным страницам не обходим: его вакансии всё равно уходят в
+    # отдельный раздел, а страницы у таких компаний огромные или битые
+    staffing = Blacklist()
+    career_pages = [p for p in career_pages if not staffing.reason(p[0].name, "", "")]
     progress.start("sources")
     fetched = collect(args, companies, http, ats, career_pages)
     progress.count(fetched=len(fetched))
@@ -435,9 +490,15 @@ def run(args):
     if tg_all is not None:
         progress.start("telegram_check", total=len(tg_all))
     tg_enriched = enrich_from_ats(tg_all or [], ats)
+    lookups = {"new": 0}  # сколько новых компаний уже искали на ATS в этом прогоне (лимит TG_BOARD_LOOKUPS)
     for job in tg_all or []:  # Telegram: те же проверки по тексту; с таблицами — только пометки
         progress.step(f"@{job.channel}: {job.title}")
         verify.check(job, job.text, job.full_text)
+        # пост прошёл по короткому тексту (дайджест со ссылкой на wantapply и т.п.) — берём полный текст с
+        # борда компании и проверяем ещё раз: требования вроде офиса или языка есть только там
+        if not job.reject and not job.full_text and _enrich_from_company_boards([job], ats, lookups):
+            tg_enriched += 1
+            verify.check(job, job.text, job.full_text)
         if job.reject:
             rejected.append(job)
             progress.tally("rejects", _reason_group(job.reject))

@@ -99,6 +99,7 @@ html.nav-collapsed .sidenav a, html.nav-collapsed .nav-toggle, html.nav-collapse
 .skip-opts label.off { opacity: .35; text-decoration: line-through; }
 .now-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .now-head h2 { margin: 0; }
+.stop-btn { border-color: var(--bad); color: var(--bad); background: transparent; }
 .skip-btn { padding: 4px 12px; font-size: 12.5px; border-color: var(--warn); color: var(--warn); background: transparent; }
 .st.skipped .ic { background: var(--chip); color: var(--warn); }
 .overall { margin-top: 16px; }
@@ -167,6 +168,9 @@ html.nav-collapsed .sidenav a, html.nav-collapsed .nav-toggle, html.nav-collapse
 .ev.reject { border-color: var(--bad); }
 .ev.source { border-color: var(--accent); }
 .errors-box { margin-top: 16px; }
+.err-group { margin-top: 8px; }
+.err-group > p { margin: 0 0 6px; }
+.err-group .errors { max-height: 260px; }
 .errors-box summary { cursor: pointer; font-weight: 600; font-size: 15px; margin-bottom: 8px; }
 .errors li { font-size: 12.5px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
 .errors b { color: var(--warn); }
@@ -197,11 +201,12 @@ table.data .num { text-align: right; font-variant-numeric: tabular-nums; }
 .q-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
 
 /* резюме */
-.cv-grid { grid-template-columns: 1fr; }
+/* «Резюме»: пока результата нет, форма на всю ширину (как «Собранные резюме»); с результатом — две колонки */
+.grid.two.cv-grid:has(#cv-result[hidden]), .grid.two.cv-grid:has(#cover-result[hidden]) { grid-template-columns: 1fr; }
 .cv-form { display: flex; flex-direction: column; gap: 12px; }
 .cv-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
 .cv-form label.inline { flex-direction: row; align-items: center; gap: 6px; color: var(--fg); }
-.cv-form input:not([type=checkbox]), .cv-form textarea { font: inherit; color: var(--fg); background: var(--bg);
+.cv-form input:not([type=checkbox]):not([type=radio]), .cv-form textarea { font: inherit; color: var(--fg); background: var(--bg);
   border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
 .cv-form textarea { resize: vertical; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -255,3 +260,10 @@ button.small { padding: 3px 10px; font-size: 12px; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 @keyframes slide { 0% { left: -30%; } 100% { left: 100%; } }
 @keyframes fadein { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+/* «Подготовка»: вставка текста вакансии без ссылки */
+.paste-job { margin: 12px 0 16px; }
+.paste-job summary { cursor: pointer; font-weight: 600; }
+.paste-form { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.paste-form textarea { width: 100%; resize: vertical; }
+.cover-text { width: 100%; box-sizing: border-box; font: inherit; line-height: 1.5; margin: 10px 0 4px; resize: vertical; }
+.style-pick { display: inline-flex; gap: 14px; flex-wrap: wrap; }

@@ -11,6 +11,15 @@ from . import config
 
 log = logging.getLogger(__name__)
 
+# «Пропустить этап» на источниках: запросы недоделанных источников обрываются сразу, а не после
+# их долгого обхода (карьерная страница — до 100 вакансий по секунде). Ставит и снимает main.py.
+cancel = threading.Event()
+
+
+class Cancelled(BaseException):
+    """Запрос отменён кнопкой. BaseException — чтобы не ловился как ошибка источника (except FetchError /
+    except Exception): источник просто выходит, не помечая борд сломанным. Ловит пул потоков (future)."""
+
 
 class FetchError(Exception):
     pass
@@ -93,8 +102,8 @@ class Http:
     def _throttle(self, host):
         with self._host_lock(host):
             delay = self._next_slot.get(host, 0) - time.monotonic()
-            if delay > 0:
-                time.sleep(delay)
+            if delay > 0 and cancel.wait(delay):
+                raise Cancelled(host)
             robots = self._robots.get(host)
             interval = max(
                 config.HOST_INTERVALS.get(host, self.min_interval),
@@ -158,6 +167,8 @@ class Http:
             raise FetchError(f"{url}: хост отключён до следующего запуска (429)")
         last = None
         for attempt in range(3):
+            if cancel.is_set():
+                raise Cancelled(url)
             self._throttle(host)
             try:
                 r = self._session().request(method, url, json=json, timeout=timeout, headers=headers)
@@ -168,7 +179,8 @@ class Http:
                 last = f"HTTP {r.status_code}"
                 retry_after = r.headers.get("Retry-After", "")
                 wait = int(retry_after) if retry_after.isdigit() else 5 * (attempt + 1)
-                time.sleep(min(wait, 60))
+                if cancel.wait(min(wait, 60)):
+                    raise Cancelled(url)
                 continue
             self._rate_limited[host] = 0
             return r

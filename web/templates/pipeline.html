@@ -13,6 +13,7 @@
         <button class="primary" data-run="all" data-skips="mail telegram freehire aggregators" title="Как run_daily.bat: сначала почта, потом вакансии">▶ Запустить прогон</button>
         <button data-run="main" data-skips="telegram freehire aggregators" title="Галочка «без почты» здесь не действует">Только вакансии</button>
         <button data-run="applications" data-skips="" title="Галочки «без …» здесь не действуют">Только почта</button>
+        <button class="stop-btn" id="stop-btn" hidden title="Завершить прогон целиком, включая следующие скрипты очереди. Собранное в этом прогоне не сохранится">⏹ Остановить прогон</button>
       </div>
       <div class="skip-opts" title="Выключить этапы заранее. Действуют только подходящие кнопке: у «Только вакансии» — всё, кроме почты; у «Только почта» — ничего">
         <span class="muted small">без:</span>
@@ -68,10 +69,23 @@
       <button data-kind="source">источники</button>
     </div>
     <div class="feed-wrap"><ul class="feed" id="feed"></ul></div>
-    <details class="errors-box" id="errors-box" hidden>
-      <summary>Предупреждения <span class="muted small" id="errors-count"></span></summary>
-      <ul class="errors" id="errors"></ul>
-    </details>
+    <div class="errors-box" id="errors-box" hidden>
+      <details class="err-group" data-group="action" open>
+        <summary>🛠 Нужно действие <span class="muted small" data-count></span></summary>
+        <p class="muted small">борд пропал или не найден, обрезано лимитом, не задан файл — смотреть руками</p>
+        <ul class="errors"></ul>
+      </details>
+      <details class="err-group" data-group="code">
+        <summary>🐞 Проблемы кода <span class="muted small" data-count></span></summary>
+        <p class="muted small">изменился формат ответа, исключения — чинить в коде</p>
+        <ul class="errors"></ul>
+      </details>
+      <details class="err-group" data-group="site">
+        <summary>🌐 Сбои сайтов <span class="muted small" data-count></span></summary>
+        <p class="muted small">robots.txt недоступен, HTTP 4xx/5xx, SSL, таймауты — обычно проходит само</p>
+        <ul class="errors"></ul>
+      </details>
+    </div>
   </div>
 </section>
 {% endblock %}

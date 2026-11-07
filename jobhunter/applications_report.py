@@ -28,11 +28,66 @@ _SHEET_IGNORED_RX = re.compile(r"игнор", re.I)
 KIND_NAMES = {
     mail.OFFER: "оффер", mail.INTERVIEW: "этап", mail.APPLIED: "отклик", mail.REJECTED: "отказ", mail.OTHER: "письмо",
 }
+# Воронка: до какого этапа дошли с компанией. Этап письма/заметки — по словам в теме; на один этап приходит
+# пачка писем (приглашение, подтверждение, напоминание), поэтому считаем не письма, а самый дальний этап.
+SCREEN, TECH, FINAL = "screen", "tech", "final"
+FUNNEL = [("applied", "Отклики"), (SCREEN, "скрининг"), (TECH, "техничка"), (FINAL, "финал"), (OFFER, "оффер")]
+_FUNNEL_RANK = {k: i for i, (k, _) in enumerate(FUNNEL)}
+_CANCELLED_RX = re.compile(r"cancel|отмен", re.I)
+_PLAN_RX = re.compile(r"дальше|далее|\bnext\b|потом|→", re.I)
+_FINAL_RX = re.compile(r"финал|\bfinal\b|\bcto\b|\bceo\b|\bvp\b|директор|founder|основател|offer call", re.I)
+_TECH_RX = re.compile(
+    r"\btech(?:nical)?\b|техни|техинтерв|техсобес|техскрин|live[\s-]?cod|лайв[\s-]?код|coding|system design|алгоритм|algorithm|тестов|take[\s-]?home|"
+    r"home ?task|assignment|разбор тз|(?<![а-яё])тз(?![а-яё])|code review|engineering interview|"
+    r"with (?:the )?team|с командой|проджект|руководител|team ?lead|тимлид|hiring manager|\b2nd\b|\bsecond\b|"
+    r"\b3rd\b|\bthird\b|1-?й раунд|2-?й раунд",
+    re.I,
+)
+
+
+def funnel_stage(app, in_sheet: str = "") -> str:
+    """Самый дальний этап с компанией: applied / screen / tech / final / offer."""
+    best = "applied"
+
+    def bump(stage):
+        nonlocal best
+        if _FUNNEL_RANK[stage] > _FUNNEL_RANK[best]:
+            best = stage
+
+    for e in app.events:
+        if e.kind == mail.OFFER:
+            bump(OFFER)
+        elif e.kind == mail.INTERVIEW and not _CANCELLED_RX.search(e.subject):
+            done = _PLAN_RX.split(e.subject, 1)[0]  # «…; дальше тестовое» — план, а не пройденный этап
+            bump(FINAL if _FINAL_RX.search(done) else TECH if _TECH_RX.search(done) else SCREEN)
+    for s in (in_sheet or "").split(","):
+        s = s.strip()
+        if re.search(r"оффер", s, re.I):
+            bump(OFFER)
+        elif re.search(r"тестов|техни", s, re.I):
+            bump(TECH)
+        elif _SHEET_STAGE_RX.search(s):
+            bump(SCREEN)
+    return best
+
+
+def funnel_line(stages: list[str]) -> str:
+    """«Отклики 127 → скрининг 25 (20%) → …»: сколько компаний дошло хотя бы до этапа; % — от откликов."""
+    total = len(stages)
+    parts = []
+    for key, label in FUNNEL:
+        n = sum(_FUNNEL_RANK[s] >= _FUNNEL_RANK[key] for s in stages)
+        pct = f" <span class=small>({n / total:.0%})</span>" if total and key != "applied" else ""
+        parts.append(f"{label} <b>{n}</b>{pct}")
+    return " → ".join(parts)
+
+
 _CSS_COLORS = """
 tr.c-green { background: rgba(34,197,94,.13); } tr.c-yellow { background: rgba(234,179,8,.15); }
 tr.c-orange { background: rgba(249,115,22,.17); } tr.c-red { background: rgba(239,68,68,.11); }
 tbody tr.c-green:hover, tbody tr.c-yellow:hover, tbody tr.c-orange:hover, tbody tr.c-red:hover { filter: brightness(.97); }
 .legend span { display: inline-block; padding: 1px 8px; border-radius: 6px; margin-right: 6px; }
+.funnel { font-size: 15px; margin: 6px 0 10px; }
 """
 
 
@@ -43,7 +98,7 @@ def _thread_link(address: str, thread: str) -> str:
 def _last_cell(event, address: str) -> str:
     """Последнее событие: ссылка на письмо или (для Telegram / LinkedIn) текст и источник."""
     if event.thread:
-        return f'<a href="{_e(_thread_link(address, event.thread))}">{_e(event.subject[:90])}</a>'
+        return f'<a href="{_e(_thread_link(address, event.thread))}" target="_blank" rel="noopener">{_e(event.subject[:90])}</a>'
     return f"{_e(event.subject[:120])} <i>({_e(event.sender)})</i>"
 
 
@@ -93,7 +148,6 @@ class StatusIndex:
     """
 
     NUDGE_AFTER_DAYS = 5  # после этапа тишина дольше — стоит напомнить о себе
-    RECENT_DAYS = 2  # «что изменилось» — события за последние двое суток
 
     def __init__(self, sheet=None):
         import json
@@ -124,18 +178,15 @@ class StatusIndex:
         return ""
 
     def digest(self) -> dict:
-        """Что изменилось за двое суток и кому пора напомнить о себе."""
-        recent, nudge = [], []
+        """Счётчики по статусам и кому пора напомнить о себе."""
+        nudge = []
         for _, app, status, _why in self.items:
-            for e in app.ordered:
-                if e.kind != mail.OTHER and (self.now - e.when).days < self.RECENT_DAYS:
-                    recent.append((e.when, app.company, KIND_NAMES[e.kind], e.subject[:90]))
             silent = (self.now - app.last.when).days
             if status == ACTIVE and silent >= self.NUDGE_AFTER_DAYS:
                 nudge.append((app.company, silent, app.last.subject[:90]))
         counts = {s: sum(1 for *_, st, _w in self.items if st == s) for s in STATUS}
         return {
-            "recent": sorted(recent, reverse=True), "nudge": sorted(nudge, key=lambda x: -x[1]), "counts": counts,
+            "nudge": sorted(nudge, key=lambda x: -x[1]), "counts": counts,
             "warning": mail.stale_warning(),
         }
 
@@ -150,8 +201,11 @@ def render(day: date, apps: list, unknown: list, address: str, sheet=None, warni
         items.append((app, in_applied, status, why))
     # сверху живое: этапы, ожидание; ниже — отказы; внутри — свежие первыми
     items.sort(key=lambda x: (order.index(x[2]), -x[0].last.when.timestamp()))
-    rows, counts = [], {}
+    rows, counts, stages = [], {}, []
+    stage_names = dict(FUNNEL) | {"applied": "отклик"}
     for app, in_applied, status, why in items:
+        stage = funnel_stage(app, in_applied)
+        stages.append(stage)
         label, css = STATUS[status]
         counts[status] = counts.get(status, 0) + 1
         silent = (now - app.last.when).days
@@ -161,19 +215,18 @@ def render(day: date, apps: list, unknown: list, address: str, sheet=None, warni
             f"<td><b>{_e(app.company)}</b></td>"
             f'<td data-sort="{order.index(status)}"><b>{_e(label)}</b>'
             f'{f"<br><span class=small>{_e(why)}</span>" if why else ""}</td>'
-            f'<td class="n">{app.stages or ""}</td>'
+            f'<td data-sort="{_FUNNEL_RANK[stage]}">{_e(stage_names[stage])}</td>'
             f'<td data-sort="{app.first:%Y%m%d}">{app.first:%Y-%m-%d}</td>'
             f'<td data-sort="{app.last.when:%Y%m%d}">{app.last.when:%Y-%m-%d}</td>'
             f'<td class="n">{silent}</td>'
             f'<td class="small">{_e(history)}</td>'
             f'<td class="small">{_last_cell(app.last, address)}</td>'
-            f'<td class="n">{len(app.events)}</td>'
             "</tr>"
         )
     unknown_rows = [
         f'<tr><td>{datetime.fromtimestamp(m["date"], tz=timezone.utc):%Y-%m-%d}</td><td>{_e(KIND_NAMES[m["kind"]])}</td>'
         f'<td class="small">{_e(m["from"])}</td>'
-        f'<td><a href="{_e(_thread_link(address, m["thread"]))}">{_e(m["subject"][:110])}</a></td></tr>'
+        f'<td><a href="{_e(_thread_link(address, m["thread"]))}" target="_blank" rel="noopener">{_e(m["subject"][:110])}</a></td></tr>'
         for m in sorted(unknown, key=lambda m: -m["date"])
     ]
     buttons = [("all", f"Все ({len(rows)})")]
@@ -195,12 +248,15 @@ def render(day: date, apps: list, unknown: list, address: str, sheet=None, warni
         f'<div class="sub">Почта {_e(address)} и applications_manual.toml (Telegram, LinkedIn) · компаний {len(rows)} · '
         f"статус — по переписке и ручным событиям · только чтение почты, "
         f"ничего не отправлялось</div>",
+        f'<div class="funnel" title="Сколько компаний дошло хотя бы до этапа. Этап — по словам в теме письма или заметке: '
+        f'tech / техническое / лайвкодинг / ТЗ / с командой — техничка; final / CTO / основатель — финал; остальное — скрининг">'
+        f"📊 {funnel_line(stages)}</div>",
         legend,
         '<div class="bar">',
         *(f'<button data-mode="{m}"{" class=on" if m == "all" else ""}>{_e(t)}</button>' for m, t in buttons),
         '<input id="q" type="search" placeholder="Поиск по компании, теме письма…"><span id="count" class="count"></span></div>',
-        _table(["Компания", "Статус", "Этапов", "Первое событие", "Последнее событие", "Дней тишины", "История",
-                "Последнее событие", "Событий"], rows, "main"),
+        _table(["Компания", "Статус", "Дошли до", "Первое событие", "Последнее событие", "Дней тишины", "История",
+                "Последнее событие"], rows, "main"),
     ]
     if unknown_rows:
         parts += [

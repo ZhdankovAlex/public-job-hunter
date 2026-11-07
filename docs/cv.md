@@ -61,3 +61,32 @@ Base CVs without a vacancy: `python cvgen.py --base backend` and `--base ai` →
 
 Automatic CVs during a run (`cvgen.auto_build`: new vacancies with Fit ≥ `auto_fit_min`) are **off**
 (`[cv].auto_max = 0`): CVs are built by the button for any vacancy.
+
+## Cover letters
+
+`jobhunter/cover_letter.py`, the "Письмо" page of the web UI (`/cover`, API `POST /api/cover`) and the "✉️" button next
+to a vacancy in the report. Like the CV, the letter invents nothing: achievements from `[summary]` and soft skills from
+`[cover]` in `cv/base.toml` are ranked against the vacancy (technologies, topics, text similarity) and put into a
+template: who you are → what you bring (hard) → how you work (soft) → honestly, what you have not used → a call to talk.
+
+- **Short** (`short`) — a one-line intro, a bulleted "what I can bring", the stack overlap, a call to talk.
+- **Full** (`full`) — paragraphs: intro, achievements (as a list — CV bullets are written without "I"), stack and soft
+  skills, which key skills of the vacancy you have not used in production.
+
+The template is the `[cover]` section of `cv/base.toml`; `{company}` and `{title}` are taken from the vacancy:
+
+```toml
+[cover]
+greeting = "Hi {company} team,"
+intro = "I'm a Backend Engineer with 5 years of Python and PostgreSQL."
+opening = "Your {title} role matches what I've been doing, so I'd like to apply."
+missing = "I haven't worked with {missing} in production yet, and I'm happy to ramp up on it."
+closing = "I'd be glad to have a call and discuss the role in more detail."
+
+[[cover.soft]]
+text = "I own features end to end, from design to production support."
+topics = ["architecture"]
+```
+
+Without `[cover]` neutral wording is used. The letter is saved next to the CV:
+`cv_out/<date>/<company>_<vacancy>_cover_<style>.txt`. Read and edit it before sending — the tool sends nothing.

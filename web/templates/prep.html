@@ -9,11 +9,23 @@
   <button class="primary" type="submit">🎤 Собрать</button>
 </form>
 <p class="muted small">Только факты из <code>cv/base.toml</code> — ничего не придумывается. Истории — раздел <code>[[stories]]</code>
-  там же (черновики: проверь формулировки). Вакансия без ссылки — вставь текст на странице «Резюме» и возьми ссылку оттуда.</p>
+  там же (черновики: проверь формулировки).</p>
+<details class="card paste-job"{% if form %} open{% endif %}>
+  <summary>Нет ссылки (PDF от рекрутера, переписка) — вставить текст вакансии</summary>
+  <form method="post" class="paste-form">
+    <div class="row2">
+      <input name="company" placeholder="Компания" value="{{ form.company if form else '' }}">
+      <input name="title" placeholder="Вакансия" value="{{ form.title if form else '' }}">
+    </div>
+    <input name="location" placeholder="Локация / формат (необязательно)" value="{{ form.location if form else '' }}">
+    <textarea name="text" rows="8" placeholder="Текст вакансии">{{ form.text if form else '' }}</textarea>
+    <div><button class="primary" type="submit">🎤 Собрать по тексту</button></div>
+  </form>
+</details>
 {% if error %}<p class="bad">⚠️ {{ error }}</p>{% endif %}
 
 {% if r %}
-<h2 class="sub-h">{{ r.company }} — {{ r.title }} <span class="muted small">Fit {{ r.fit }}% · <a href="{{ r.url }}" target="_blank">вакансия ↗</a></span></h2>
+<h2 class="sub-h">{{ r.company }} — {{ r.title }} <span class="muted small">Fit {{ r.fit }}%{% if r.url %} · <a href="{{ r.url }}" target="_blank">вакансия ↗</a>{% endif %}</span></h2>
 <section class="grid two">
   <div class="card">
     <h2>Рассказ о себе (черновик, EN)</h2>

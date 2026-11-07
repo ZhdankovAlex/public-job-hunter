@@ -100,7 +100,9 @@ _EXPERIENCE_CONTEXT_RX = re.compile(
     r"разработ|коммерческ|в роли|работы", re.I
 )
 _NOT_A_JOB_RX = re.compile(
-    r"\bai trainer\b|train AI systems|per[\s-]task\b|output[\s-]based|\bannotat(?:or|ion)s?\b|data label", re.I
+    # «annotation» само по себе — не разметка (аннотации PDF, type annotations в Python)
+    r"\bai trainer\b|train AI systems|per[\s-]task\b|output[\s-]based|\bannotators?\b|"
+    r"data annotation|annotation (?:tasks?|work|projects?|jobs?)|data label", re.I
 )
 HIDE_LANGUAGES = {"Go", "Java", "Kotlin", "Ruby", "PHP", "C#/.NET", ".NET", "Rust"}
 _REQUIRED_LANG_RX = re.compile(

@@ -69,8 +69,23 @@ def _ashby(data, company):
 
 
 def _workable(data, company):
+    # Workable отдаёт вакансию с несколькими странами отдельной записью на каждую (тот же url): склеиваем,
+    # иначе остаётся только первая страна (а подходящая может оказаться пятой записью) и вакансия отсеивается
+    merged: dict[str, dict] = {}
     for j in data.get("jobs", []):
+        key = j.get("url") or j.get("shortlink") or j.get("shortcode") or j.get("title", "")
         place = ", ".join(filter(None, [j.get("city"), j.get("state"), j.get("country")]))
+        if key in merged:
+            m = merged[key]
+            m["places"].append(place)
+            m["remote"] = m["remote"] or bool(j.get("telecommuting"))
+        else:
+            merged[key] = {"job": j, "places": [place], "remote": bool(j.get("telecommuting"))}
+    for m in merged.values():
+        j = m["job"]
+        place = "; ".join(dict.fromkeys(filter(None, m["places"])))
+        if m["remote"] and len(m["places"]) > 1:
+            place += " (remote)"
         yield Job(
             company=company,
             title=j.get("title", ""),
@@ -78,7 +93,7 @@ def _workable(data, company):
             url=j.get("url") or j.get("shortlink") or "",
             posted=parse_date(j.get("published_on") or j.get("created_at")),
             description=html_to_text(j.get("description")),
-            remote=j.get("telecommuting"),
+            remote=m["remote"] or j.get("telecommuting"),
             employment=j.get("employment_type") or "",
             source="workable",
         )
@@ -168,6 +183,27 @@ def _breezy(data, company):
         )
 
 
+def _rippling(data, company):
+    """Rippling ATS: список без текста, вакансия повторяется на каждую локацию (тот же uuid) — склеиваем.
+    Текст и формат работы — из карточки вакансии (_fill_details)."""
+    merged: dict[str, dict] = {}
+    for j in data if isinstance(data, list) else []:
+        place = (j.get("workLocation") or {}).get("label") or ""
+        m = merged.setdefault(j.get("uuid") or j.get("url") or j.get("name", ""), {"job": j, "places": []})
+        m["places"].append(place)
+    for m in merged.values():
+        j = m["job"]
+        location = "; ".join(dict.fromkeys(filter(None, m["places"])))
+        yield Job(
+            company=company,
+            title=(j.get("name") or "").strip(),
+            location=location,
+            url=j.get("url") or "",
+            remote=True if re.search(r"remote", location, re.I) else None,
+            source="rippling",
+        )
+
+
 # platform -> (url, params, parser)
 PLATFORMS = {
     "greenhouse": ("https://boards-api.greenhouse.io/v1/boards/{slug}/jobs", {"content": "true"}, _greenhouse),
@@ -178,11 +214,16 @@ PLATFORMS = {
     "recruitee": ("https://{slug}.recruitee.com/api/offers/", None, _recruitee),
     "bamboohr": ("https://{slug}.bamboohr.com/careers/list", None, _bamboohr),
     "breezy": ("https://{slug}.breezy.hr/json", None, _breezy),
+    "rippling": ("https://api.rippling.com/platform/api/ats/v1/board/{slug}/jobs", None, _rippling),
 }
-DETAIL_FETCH_LIMIT = 8  # сколько страниц вакансий открывать на компанию (BambooHR, Breezy)
+DETAIL_FETCH_LIMIT = 8  # сколько страниц вакансий открывать на компанию (BambooHR, Breezy, Rippling)
 # Teamtailor — отдельный хост на каждую компанию, поэтому slug не подбирается автоматически:
 # такие борды вписываются в ats_mapping.json вручную.
 DISCOVERABLE = ("greenhouse", "lever", "ashby", "workable")
+
+
+# ответ закрытого борда: доступ запрещён / удалён, либо HTML-страница вместо JSON (BambooHR, Teamtailor)
+_BOARD_CLOSED_RX = re.compile(r"HTTP (?:401|403|410)\b|(?:bamboohr|teamtailor)/\S+: не удалось разобрать")
 
 
 class AtsClient:
@@ -194,10 +235,18 @@ class AtsClient:
         self.failures = {}  # company -> причина, по которой сегодня нет вакансий
         if mapping_path.exists():
             self.mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
+        self._loaded = json.loads(json.dumps(self.mapping))  # что было при старте — для сохранения слиянием
 
     def save(self):
+        """Слиянием: в файл попадают только записи, изменённые этим процессом. Правки, сделанные в
+        ats_mapping.json, пока шёл прогон (руками или другим скриптом), не затираются."""
         with self.lock:
-            text = json.dumps(self.mapping, ensure_ascii=False, indent=2, sort_keys=True)
+            current = json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {}
+            for name, entry in self.mapping.items():
+                if self._loaded.get(name) != entry:
+                    current[name] = entry
+            self._loaded = json.loads(json.dumps(self.mapping))
+            text = json.dumps(current, ensure_ascii=False, indent=2, sort_keys=True)
         self.path.write_text(text, encoding="utf-8")
 
     def _fetch(self, platform, slug, company):
@@ -220,12 +269,12 @@ class AtsClient:
             raise FetchError(f"{platform}/{slug}: не удалось разобрать ответ ({e})")
         for job in jobs:
             job.score, job.note = company.score, company.note
-        if platform in ("bamboohr", "breezy"):
+        if platform in ("bamboohr", "breezy", "rippling"):
             self._fill_details(platform, slug, jobs)
         return jobs
 
     def _fill_details(self, platform, slug, jobs):
-        """Текст вакансии для BambooHR/Breezy — только у подходящих по названию, не больше лимита."""
+        """Текст вакансии для BambooHR/Breezy/Rippling — только у подходящих по названию, не больше лимита."""
         from . import filters  # filters не импортирует ats, но держим импорт рядом с использованием
 
         candidates = [j for j in jobs if filters.title_candidate(j.title)][:DETAIL_FETCH_LIMIT]
@@ -236,6 +285,18 @@ class AtsClient:
                     opening = (r.json().get("result") or {}).get("jobOpening") or {} if r.status_code == 200 else {}
                     job.description = html_to_text(opening.get("description"))
                     job.posted = job.posted or parse_date(opening.get("datePosted"))
+                elif platform == "rippling":
+                    uid = job.url.rstrip("/").rsplit("/", 1)[-1]
+                    r = self.http.get(f"https://api.rippling.com/platform/api/ats/v1/board/{slug}/jobs/{uid}")
+                    card = r.json() if r.status_code == 200 else {}
+                    desc = card.get("description") or {}
+                    job.description = html_to_text(" ".join(str(v) for v in desc.values()) if isinstance(desc, dict) else desc)
+                    places = [p for p in card.get("workLocations") or [] if isinstance(p, str)]
+                    if places:
+                        job.location = "; ".join(dict.fromkeys(places))
+                        job.remote = True if re.search(r"remote", job.location, re.I) else job.remote
+                    job.employment = ((card.get("employmentType") or {}).get("id") or "") if isinstance(card.get("employmentType"), dict) else ""
+                    job.posted = job.posted or parse_date(card.get("createdOn"))
                 else:
                     r = self.http.get(job.url)
                     m = re.search(r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>', r.text, re.S) if r.status_code == 200 else None
@@ -265,7 +326,26 @@ class AtsClient:
                     empty_hit = f"{platform}/{slug}"
         return None, empty_hit, [], had_errors
 
-    def jobs_for(self, company, rediscover=False):
+    def _board_gone(self, company, board: str) -> list:
+        """Борд пропал: один раз ищем заново и пишем ОДНО предупреждение (переехал / борда нет),
+        чтобы оно не повторялось в каждом прогоне. Новый поиск — через RECHECK_NOT_FOUND_DAYS."""
+        self.failures[company.name] = f"борд {board} пропал"
+        jobs = self.jobs_for(company, rediscover=True, quiet=True)
+        new = self.mapping.get(company.name) or {}
+        found = f"{new.get('platform')}/{new.get('slug')}" if new.get("platform") else ""
+        if found and found != board:
+            # исправлено само — не предупреждение, а запись в ленту прогона
+            from . import progress
+            log.info("%s: борд %s пропал — переехал на %s (%d вакансий)", company.name, board, found, len(jobs))
+            progress.event("source", f"{company.name}: борд переехал {board} → {found}")
+        elif not found:
+            with self.lock:
+                self.mapping[company.name] = {"platform": None, "checked_at": date.today().isoformat(), "gone": board}
+            log.warning("%s: борд %s пропал, нового не нашлось — борда нет, перепроверка через %d дней",
+                        company.name, board, config.RECHECK_NOT_FOUND_DAYS)
+        return jobs or []
+
+    def jobs_for(self, company, rediscover=False, quiet=False):
         with self.lock:
             entry = None if rediscover else self.mapping.get(company.name)
         override = geo.S.get("ats_overrides", {}).get(company.name, {})
@@ -276,20 +356,17 @@ class AtsClient:
             return []  # у компании свой сайт — её читает jobhunter/sites.py
 
         if entry and entry.get("platform"):
+            board = f"{entry['platform']}/{entry['slug']}"
             try:
                 jobs = self._fetch(entry["platform"], entry["slug"], company)
             except FetchError as e:
-                log.warning("%s: %s", company.name, e)
-                self.failures[company.name] = f"ошибка запроса: {e}"
-                return []
+                if not _BOARD_CLOSED_RX.search(str(e)):
+                    log.warning("%s: %s", company.name, e)
+                    self.failures[company.name] = f"ошибка запроса: {e}"
+                    return []
+                jobs = None  # 401/403/410 или HTML вместо данных (BambooHR, Teamtailor) — борд закрыт
             if jobs is None:
-                self.failures[company.name] = f"борд {entry['platform']}/{entry['slug']} вернул 404"
-                log.warning(
-                    "%s: борд %s/%s больше не существует — поправьте ats_mapping.json "
-                    "или запустите с --rediscover",
-                    company.name, entry["platform"], entry["slug"],
-                )
-                return []
+                return self._board_gone(company, board)
             return jobs
 
         if entry and entry.get("manual"):
@@ -308,7 +385,8 @@ class AtsClient:
             new_entry = {"platform": None, "checked_at": today.isoformat()}
             if slug:
                 new_entry["empty_board"] = slug
-            log.warning(
+            log.log(
+                logging.INFO if quiet else logging.WARNING,
                 "%s: slug не найден ни на одной ATS%s — пропущена",
                 company.name, f" (только пустой борд {slug})" if slug else "",
             )

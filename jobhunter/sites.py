@@ -1,4 +1,4 @@
-"""Карьерные страницы без стандартной ATS: Aiven, Bolt, fin.dev, Gurtam.
+"""Карьерные страницы без стандартной ATS: Aiven, Bolt, fin.dev, Gurtam, Paychex (примеры адаптеров).
 
 У этих компаний нет публичного JSON API, поэтому читается HTML их собственных
 страниц (robots.txt проверяется клиентом Http, лимит — 1 запрос в секунду на хост).
@@ -186,7 +186,38 @@ def aiven(http: Http) -> Iterator[Job]:
         )
 
 
-SOURCES = {"aiven": aiven, "bolt": bolt, "fin.dev": findev, "gurtam": gurtam}
+def paychex(http: Http) -> Iterator[Job]:
+    """Paychex: карьерный сайт на iCIMS Jibe, открытый JSON /api/jobs с текстом вакансии (robots.txt: crawl-delay 5).
+    Вакансий немного (~60, в основном продажи в США) — читаем все, роль и локацию отсеют фильтры."""
+    seen, page = 0, 1
+    while page <= 5:
+        r = http.get("https://careers.paychex.com/api/jobs", params={"page": page, "limit": 100})
+        if r.status_code != 200:
+            raise FetchError(f"careers.paychex.com/api/jobs: HTTP {r.status_code}")
+        data = r.json()
+        items = data.get("jobs") or []
+        for item in items:
+            j = item.get("data") or {}
+            if not filters.title_candidate(j.get("title") or ""):
+                continue
+            text = " ".join(html_to_text(j.get(k)) for k in ("description", "responsibilities", "qualifications") if j.get(k))
+            yield Job(
+                company="Paychex",
+                title=j.get("title") or "",
+                location=j.get("full_location") or ", ".join(filter(None, [j.get("city"), j.get("country")])),
+                url=f"https://careers.paychex.com/careers/jobs/{j.get('req_id')}?lang=en-us",
+                posted=parse_date(j.get("posted_date")),
+                description=text,
+                employment=(j.get("employment_type") or "").replace("_", " ").lower(),
+                source="paychex",
+            )
+        seen += len(items)
+        if not items or seen >= int(data.get("totalCount") or 0):
+            break
+        page += 1
+
+
+SOURCES = {"aiven": aiven, "bolt": bolt, "fin.dev": findev, "gurtam": gurtam, "paychex": paychex}
 
 
 def enabled_sources() -> list[str]:
@@ -682,9 +713,15 @@ SOURCES.update({
 # --- Карьерные страницы компаний без поддерживаемой ATS (settings.toml [career_pages]) ------
 
 PAGE_STATUS: dict[str, dict] = {}  # компания -> что удалось прочитать (для отчёта о доступности)
-PAGE_DETAIL_LIMIT = 5
+PAGE_DETAIL_LIMIT = 100  # предохранитель от неверно разобранной страницы; самые подходящие — первыми
 _ANCHOR_RX = re.compile(r'<a\s([^>]*?href="([^"#]+)"[^>]*)>(.*?)</a>', re.S | re.I)
 _LABEL_RX = re.compile(r'(?:aria-label|title)="([^"]+)"', re.I)
+
+
+# текст ссылки, который не название вакансии; тогда название — из адреса (/job/<slug>, /careers/<slug>)
+_CORE_TITLE_RX = re.compile(r"python|django|fastapi|back[\s-]?end|бэкенд|бекенд", re.I)
+_GENERIC_LINK_RX = re.compile(r"^(?:apply(?: now)?|learn more|read more|details|view(?: job| role)?|more|подробнее|откликнуться|смотреть)\W*$", re.I)
+_JOB_SLUG_RX = re.compile(r"/(?:jobs?|careers?|positions?|vacanc(?:y|ies)|openings?)/([a-z0-9][a-z0-9_-]{3,90})/?(?:[?#]|$)", re.I)
 
 
 def career_page(http: Http, company, url: str, location: str = "") -> list[Job]:
@@ -714,11 +751,20 @@ def career_page(http: Http, company, url: str, location: str = "") -> list[Job]:
         label = _LABEL_RX.search(attrs)
         # ссылка-кнопка без текста: название вакансии есть только в aria-label / title («Должность, Отдел»)
         title = lines[0] if lines else (html.unescape(label.group(1)).split(",")[0].strip() if label else "")
+        if _GENERIC_LINK_RX.match(title):
+            # кнопка «Apply», а название — в соседнем блоке: берём из адреса /job/senior-python-developer
+            slug = _JOB_SLUG_RX.search(href)
+            title = slug.group(1).replace("-", " ").replace("_", " ").strip().title() if slug else ""
         if 5 <= len(title) <= 110 and filters.title_candidate(title):
             candidates.setdefault(urljoin(r.url, href), title)
     status["links"] = len(candidates)
+    # сначала Python / backend, потом остальные инженерные роли — при обрезке лимитом теряются наименее подходящие
+    ranked = sorted(candidates.items(), key=lambda kv: (0 if _CORE_TITLE_RX.search(kv[1]) else 1))
+    if len(ranked) > PAGE_DETAIL_LIMIT:
+        log.warning("%s: открыто %d из %d подходящих вакансий на карьерной странице — остальные пропущены "
+                    "(лимит PAGE_DETAIL_LIMIT в sites.py)", company.name, PAGE_DETAIL_LIMIT, len(ranked))
     jobs: list[Job] = []
-    for link, title in list(candidates.items())[:PAGE_DETAIL_LIMIT]:
+    for link, title in ranked[:PAGE_DETAIL_LIMIT]:
         try:
             page = http.get(link, timeout=25, headers=_HTML)
         except FetchError:

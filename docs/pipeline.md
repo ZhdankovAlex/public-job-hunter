@@ -31,7 +31,8 @@ has no Google libraries, and `applications.py` fails on `import google.auth`.
 | `reports/jobs_YYYY-MM-DD.html` / `.md` | The same report by date; Markdown is the full text version with all sections |
 | `reports/applications.html` | Applications: status per company, mail history, who to follow up with |
 | `cv_out/YYYY-MM-DD/` | CVs (MD + PDF) for vacancies — from the "📄 CV" button or the CV page |
-| `errors.log` | Warnings and errors of all runs |
+| `errors.log` | Warnings and errors of the current (last) run |
+| `errors.prev.log` | The same for the run before it |
 | `state/progress.json` | What the run is doing right now (see below) |
 
 ## Daily runs
@@ -61,7 +62,7 @@ Both scripts split the work into stages and keep `state/progress.json` (`jobhunt
 | 5 | freehire.me: full texts and checks | Duplicates of found vacancies, missing texts, full-text checks | — |
 | 6 | Applications | `applications_manual.toml` and statuses from the mail cache | — |
 | 7 | Telegram channels | Web preview t.me/s/… (if enabled) | channels |
-| 8 | Telegram vacancy checks | The same full-text checks on the post | vacancies |
+| 8 | Telegram vacancy checks | The same full-text checks on the post; a post without the full text gets it from the company's ATS board (same title) and is checked again | vacancies |
 | 9 | CV matching, scores, salaries | Fit %, categories, relevance, salary ranges | — |
 | 10 | CVs for vacancies | PDFs for new vacancies with a high Fit (off by default) | CVs |
 | 11 | Reports | MD, HTML, `latest.html`, `jobs_latest.json` | — |
@@ -99,9 +100,15 @@ passed filters, new, rejected) and the last 5 warnings. A run whose process ende
 - Parallel sources are wrapped in `progress.tracked(name, function, …)`: while the request runs, the source
   is listed as "processing now".
 - The file is written at most every 0.5 s via a temporary file and `os.replace` — a reader never sees half a
-  JSON. Log warnings (WARNING and above) go to `errors` (the last 20).
+  JSON. Log warnings (WARNING and above) of the whole run go to `errors`, each with a `group`
+  (`progress.error_group`): `action` — needs a human (a board is gone or moved, a company has no board, a list was
+  cut by a limit), `code` — a code problem (a response format changed, an exception), `site` — another site's
+  failure (HTTP errors, SSL, timeouts).
+- `errors.log` holds only the current run: a new run moves it to `errors.prev.log`. "Run everything" is two
+  scripts in a row; the second gets `JOBHUNTER_CONTINUE_RUN=1` (set by the web UI and `run_daily.bat`) and appends
+  to the same file.
 - An exception or Ctrl+C marks the current stage and the run as `failed`.
-- `progress.event(kind, text)` is the event feed (last 60): `found` — a vacancy passed the filters,
+- `progress.event(kind, text)` is the event feed of the whole run (up to 5000 events): `found` — a vacancy passed the filters,
   `reject` — rejected with a reason, `source` — a source total. `progress.tally(group, key)` builds breakdowns:
   `rejects` (rejection reasons, grouped in `main._reason_group`) and `source_kinds` (vacancies by source kind).
 - After a successful run the stage durations go to `state/progress_history.json` (last 5 runs);

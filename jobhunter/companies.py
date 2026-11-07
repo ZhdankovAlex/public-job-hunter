@@ -23,10 +23,15 @@ def load_companies(path=config.COMPANIES_FILE):
     return list(companies.values())
 
 
+_CYRILLIC_LOOKALIKES = str.maketrans("аеорсухкмтвнАЕОРСУХКМТВН", "aeopcyxkmtbhAEOPCYXKMTBH")
+
+
 def slug_candidates(name):
     """Эвристические slug'и: 'Grafana Labs' -> grafanalabs, grafana-labs, grafana."""
     out = []
     base = re.sub(r"\(.*?\)", "", name)
+    if re.search(r"[A-Za-z]", base):  # «Acme.аi» с кириллической «а»: кириллические двойники латинских букв
+        base = base.translate(_CYRILLIC_LOOKALIKES)
     for variant in base.split("/"):
         tokens = re.findall(r"[a-z0-9]+", variant.lower())
         if not tokens:

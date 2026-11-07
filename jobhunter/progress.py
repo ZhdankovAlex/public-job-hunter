@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import sys
 import threading
@@ -26,8 +27,26 @@ from . import config
 
 PROGRESS_FILE = config.ROOT / "state" / "progress.json"
 WRITE_EVERY = 0.5  # секунд между записями файла и перерисовкой строки
-MAX_ERRORS = 20  # последних предупреждений и ошибок в файле
-MAX_EVENTS = 60  # последних событий ленты
+MAX_ERRORS = 2000  # предупреждений и ошибок прогона в progress.json (страховка от разрастания файла)
+
+# Группы предупреждений — что с ними делать:
+#   action — нужно действие человека: борд пропал/переехал, компания без борда, обрезано лимитом, не задан файл;
+#   code   — проблема кода: формат ответа изменился, исключение (ERROR) — чинить в коде;
+#   site   — сбой чужого сайта: robots.txt недоступен, HTTP 4xx/5xx, SSL, таймаут — обычно само проходит.
+_ACTION_RX = re.compile(
+    r"больше не существует|переехал|борда нет|slug не найден|открыто \d+ из \d+|не задан|не найдено —|"
+    r"поправьте|settings\.toml|компания не определена", re.I)
+_CODE_RX = re.compile(r"не удалось разобрать|формат .{0,40}изменился|traceback|exception", re.I)
+
+
+def error_group(level: str, message: str) -> str:
+    """action / code / site для предупреждения из лога."""
+    if _ACTION_RX.search(message):
+        return "action"
+    if level in ("ERROR", "CRITICAL") or _CODE_RX.search(message):
+        return "code"
+    return "site"
+MAX_EVENTS = 5000  # событий ленты за прогон (страховка от разрастания файла, как MAX_ERRORS)
 HISTORY_FILE = config.ROOT / "state" / "progress_history.json"  # длительности этапов прошлых прогонов
 HISTORY_RUNS = 5
 # просьбы веб-интерфейса к идущему прогону: {"pid": …, "skip": [ключи этапов]}
@@ -88,7 +107,7 @@ class Pipeline:
             pass
         self.counters: dict[str, int] = {}
         self.tallies: dict[str, dict[str, int]] = {}  # разбивки: причины отказа, вакансии по источникам
-        self.events: list[dict] = []  # лента: что найдено, что отброшено (последние MAX_EVENTS)
+        self.events: list[dict] = []  # лента прогона: что найдено, что отброшено (все этапы, до MAX_EVENTS)
         self.errors: list[dict] = []
         self.active: dict[str, float] = {}  # источники, которые обрабатываются прямо сейчас
         self.last_item = ""
@@ -339,6 +358,27 @@ def render(data: dict) -> str:
     return "\n".join(lines)
 
 
+CONTINUE_RUN_ENV = "JOBHUNTER_CONTINUE_RUN"  # второй скрипт того же прогона (почта -> вакансии): лог не ротировать
+
+
+def rotate_errors_log() -> None:
+    """Новый прогон: errors.log -> errors.prev.log (прошлый перезаписывается), errors.log начинается заново.
+
+    Прогон «всё» — два скрипта подряд; второй запускается с JOBHUNTER_CONTINUE_RUN=1 и дописывает
+    в тот же errors.log (веб-интерфейс и run_daily.bat ставят переменную сами).
+    """
+    import os
+
+    from . import config
+
+    if os.environ.get(CONTINUE_RUN_ENV) or not config.ERRORS_LOG.exists():
+        return
+    try:
+        os.replace(config.ERRORS_LOG, config.ERRORS_LOG_PREV)
+    except OSError:  # файл держит другой процесс — пишем дальше в старый
+        pass
+
+
 class _ErrorCollector(logging.Handler):
     """Предупреждения и ошибки из лога — в progress.json (последние MAX_ERRORS)."""
 
@@ -352,7 +392,9 @@ class _ErrorCollector(logging.Handler):
             logging.getLogger().removeHandler(self)
             return
         with p._lock:
-            p.errors.append({"time": _now(), "level": record.levelname, "message": record.getMessage()[:500]})
+            message = record.getMessage()[:500]
+            p.errors.append({"time": _now(), "level": record.levelname, "message": message,
+                             "group": error_group(record.levelname, message)})
             del p.errors[:-MAX_ERRORS]
 
 

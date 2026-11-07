@@ -33,9 +33,19 @@ last letter dates, days of silence, the history and a link to the last letter.
   vacancy `url`. If the company is also in the mail, the events are merged into one row. Events with a `url` also
   dedupe the vacancy report: a vacancy you applied to (not rejected) is hidden; after a rejection it is shown with
   a "🔁" mark.
+- Where the company comes from, besides the sender and the subject: a Google Calendar invitation (the organiser's
+  corporate domain), the letter text ("…position with Acme", "interest in Acme's … role"), iCIMS / Recruitee senders
+  ("Acme @ icims"). A LinkedIn InMail titled "JOB OFFER AT …" is a recruiter writing first, not an offer; an offer
+  mentioned in the process description of an application confirmation is not an offer either.
 - Letters that look like an application / stage / rejection but have no clear company go to "Компания не
-  определена" at the bottom. Fix company spelling in `settings.toml` → `[mail.company_aliases]`; your own name in
-  senders goes to `[mail].own_names`.
+  определена" at the bottom. Fix company spelling in `settings.toml` → `[mail.company_aliases]`; for letters where the
+  company is nowhere, bind a sender (part of the name or address, also searched in the signature) in
+  `[mail.sender_company]`; your own name in senders goes to `[mail].own_names`.
+- **Funnel.** Above the table: "Отклики N → скрининг → техничка → финал → оффер" — how many companies got at least to
+  each stage, % of applications. The stage is the furthest one by the words in letter subjects and notes (tech /
+  live coding / take-home / with the team — tech interview; final / CTO / founder — final; other invitations —
+  screening; cancelled meetings and "next: …" plans do not count). The "Дошли до" column shows it per company; links
+  open in a new tab.
 - The mail cache is `state/mail_cache.json`, the token — `state/gmail_token.json` (`state/` is in `.gitignore`).
 
 `--no-applied` (for both `main.py` and `applications.py`) ignores `applications_manual.toml`.

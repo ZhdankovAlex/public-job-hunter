@@ -81,7 +81,7 @@ hide_russia_only = false
 # Имена — как в sites.SOURCES / на странице «Источники». По умолчанию выключены русскоязычные
 # площадки и адаптеры сайтов отдельных компаний (примеры, как подключить сайт без ATS);
 # уберите имя из списка, чтобы опрашивать источник.
-disabled = ["habr career", "hirehi", "aiven", "bolt", "fin.dev", "gurtam", "rivian", "01.tech"]
+disabled = ["habr career", "hirehi", "aiven", "bolt", "fin.dev", "gurtam", "rivian", "01.tech", "paychex"]
 
 # --- freehire.me: основной источник (https://freehire.me/docs/api) -----------------
 [freehire]
@@ -115,6 +115,17 @@ title = "Релокация"
 requires_relocation = true     # запрос выполняется только при relocation_enabled = true
 relocation = "supported"       # любая страна, но с помощью в релокации
 open_within_days = 30
+
+# Визовая поддержка в Европе и UK: флаг самой вакансии visa_sponsorship=true (а не «компания — спонсор»)
+[[freehire.queries]]
+name = "V"
+title = "Виза: Европа и UK"
+requires_relocation = true
+visa_sponsorship = "true"
+category = "backend,software_engineering,ai_engineering"
+regions = "eu,uk"
+open_within_days = 30
+reality = ""                   # флаг визы редкий: без reality=fresh находится заметно больше
 
 # Вакансии в домашней стране: countries — ISO-код из [home].iso в нижнем регистре
 # [[freehire.queries]]
@@ -245,3 +256,7 @@ utc_offset_hours = 0
 # написание компании в письмах -> как показывать (если ATS пишет юрлицо или домен)
 [mail.company_aliases]
 "Example Global Limited" = "Example"
+# отправитель (кусок имени или адреса) -> компания: для писем, где компании нет ни в теме, ни в тексте
+[mail.sender_company]
+# "Jane Recruiter" = "Example Corp"
+

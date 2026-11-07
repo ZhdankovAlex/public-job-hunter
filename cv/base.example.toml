@@ -102,3 +102,23 @@ topics = ["performance"]
 situation = "The main API endpoint was slow under load."
 action = "Profiled queries, removed N+1 patterns and added an index."
 result = "p95 latency dropped from 800 ms to 120 ms."
+
+# Сопроводительное письмо (jobhunter/cover_letter.py): {company}, {title} подставляются из вакансии.
+# soft — как работаю; подбираются под вакансию по topics и тексту, requires — как у достижений.
+[cover]
+greeting = "Hi {company} team,"
+intro = "I'm a Backend Engineer with 5 years of Python and PostgreSQL."
+opening = "Your {title} role matches what I've been doing, so I'd like to apply."
+lead_short = "What I can bring:"
+lead_full = "Most relevant to your role:"
+missing = "I haven't worked with {missing} in production yet, and I'm happy to ramp up on it."
+closing = "I'd be glad to have a call and discuss the role in more detail."
+sign = "Best regards,"
+
+[[cover.soft]]
+text = "I own features end to end, from design to production support."
+topics = ["architecture"]
+
+[[cover.soft]]
+text = "I write documentation the team relies on and help teammates with technical questions."
+topics = ["quality"]

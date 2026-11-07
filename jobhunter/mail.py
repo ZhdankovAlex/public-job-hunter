@@ -33,8 +33,8 @@ BODY_CHARS = 4000  # сколько текста письма хранить и 
 # ATS и площадки: компания — в имени отправителя или в теме, а не в домене
 ATS_DOMAINS_RX = re.compile(
     r"greenhouse(?:-mail)?\.io|lever\.co|ashbyhq\.com|workable(?:mail)?\.com|teamtailor(?:-mail)?\.com|"
-    r"recruitee\.com|bamboohr\.com|breezy\.hr|smartrecruiters\.com|myworkday(?:jobs)?\.com|workday\.com|"
-    r"personio\.\w+|pinpointhq\.com|comeet\.\w+|jobvite\.com|icims\.com|successfactors\.\w+|eightfold\.ai|"
+    r"recruitee(?:-mailbox)?\.com|bamboohr\.com|breezy\.hr|smartrecruiters\.com|myworkday(?:jobs)?\.com|workday\.com|"
+    r"personio\.\w+|pinpointhq\.com|comeet\.\w+|jobvite\.com|icims\.\w+|successfactors\.\w+|eightfold\.ai|"
     r"huntflow\.\w+|hh\.ru|headhunter\.\w+|career\.habr\.com|habr\.com|linkedin\.com|djinni\.co|"
     r"getmatch\.ru|hirify\.\w+|welcometothejungle\.com|join\.com|otta\.com|wellfound\.com|indeed\.com|"
     r"gem\.com|rippling\w*\.com|applytojob\.com|jazzhr\.com|breezy-mail\.com|hackerrank\w*\.com|canditech\.io|"
@@ -79,12 +79,17 @@ _OWN_NAMES = {n.strip().lower() for n in geo.S.get("mail", {}).get("own_names", 
 # "Interview with Initech", "Отклик на вакансию … в компанию «Ромашка»"
 _SUBJECT_COMPANY_RXS = [
     # "... Senior Software Engineer at NVIDIA" — компания после последнего "at" в конце темы
-    re.compile(r"\bat\s+(?P<c>[A-Z][\w&.'’-]{1,30}(?:\s[A-Z][\w&.'’-]{1,30})?)\s*[!.]?\s*$"),
-    re.compile(r"(?:applying|application|applied|interest|sent)\s+(?:to|at|for|with|in)\s+(?:the\s+)?"
-               r"(?P<c>[A-Z0-9][\w&.'’ -]{1,40}?)"
+    re.compile(r"\b(?i:at)\s+(?P<c>[A-Z][\w&.'’-]{1,30}(?:\s[A-Z][\w&.'’-]{1,30})?)\s*[!.]?\s*$"),
+    # «Your Application at Acme – …», «Thank you for applying to Acme + Globex Labs!»
+    re.compile(r"(?i:applying|application|applied|interest|sent)\s+(?:to|at|for|with|in)\s+(?:the\s+)?"
+               r"(?P<c>[A-Z0-9][\w&.'’+ -]{1,40}?)"
                r"(?:\s*[!.,:|–—-]|\s+(?:for|has|was|is|team)\b|$)"),
-    re.compile(r"(?:interview|call|chat|meeting|invitation|offer|update|next steps?)\s+(?:with|from|at)\s+"
+    # LinkedIn: «Jane, your application was sent to Acme» / «… sent to globex.» — название бывает со строчной
+    re.compile(r"application was sent to\s+(?P<c>[\w&'’+-][\w&.'’+ -]{0,38}?)\.?\s*$", re.I),
+    re.compile(r"(?i:interview|call|chat|meeting|invitation|offer|update|next steps?|introduction|request)\s+"
+               r"(?i:with|from|at|to|for)\s+"
                r"(?P<c>[A-Z0-9][\w&.'’ -]{1,40}?)(?=\s*(?:[^\w\s&.'’-]|$)|\s+(?:for|team|on|@)\b)"),
+    re.compile(r"^(?P<c>[A-Z][\w&.'’]{1,30}) is on it\b"),  # Greenhouse: «Acme is on it!»
     re.compile(r"(?:applying|interest)\s+(?:to|in)\s+(?P<c>[a-z][\w&.'’-]{2,30})\.?\s*$"),
     re.compile(r"invited by\s+(?P<c>[A-Z0-9][\w&.'’-]{1,30}(?:\s[A-Z][\w&.'’-]{1,30})?)"),
     re.compile(r"^(?P<c>[A-Z][\w&.'’]{1,30}(?:\s[A-Z][\w&.'’]{1,30})?)(?:\s+[-–—|]\s|:\s)"),
@@ -95,6 +100,10 @@ _SUBJECT_COMPANY_RXS = [
 _BODY_COMPANY_RXS = [
     re.compile(r"компани[яиюе]\s+[«\"](?P<c>[^»\"\n]{2,40})[»\"]", re.I),
     re.compile(r"(?:application|applying)\s+(?:to|at|with)\s+(?P<c>[A-Z][\w&.'’-]{1,30}(?:\s[A-Z][\w&.'’-]{1,30})?)"),
+    # «…the Software Engineer position with Acme», «interest in the position at Globex!»
+    re.compile(r"position (?:at|with)\s+(?P<c>[A-Z][\w&.'’-]{1,30}(?:\s[A-Z][\w&.'’-]{1,30})?)(?=[!.,\s])"),
+    # «Thank you for your interest in Initech's Senior Backend Developer role»
+    re.compile(r"interest in\s+(?P<c>[A-Z][\w&.-]{1,30}(?:\s[A-Z][\w&.-]{1,30})?)(?:'s|’s)\s"),
 ]
 
 # --- Что это за письмо ----------------------------------------------------------------------
@@ -152,7 +161,7 @@ _INTERVIEW_STRONG_RX = re.compile(f"{_INVITE_RX.pattern}|{_STAGE_RX.pattern}", r
 _APPLIED_RX = re.compile(
     r"thank(?:s| you) for (?:your )?(?:applying|application|interest)|"
     r"application (?:was |has been )?(?:received|submitted|sent)|we(?:'ve| have) received your application|"
-    r"your application (?:to|for|was sent|has been)|application confirmation|"
+    r"your application (?:to|for|was sent|has been)|application confirmation|confirmation of (?:your )?application|application receipt|"
     r"спасибо за (?:отклик|интерес)|ваш отклик|отклик (?:на вакансию|отправлен|получен)|резюме (?:получено|отправлено)",
     re.I,
 )
@@ -187,7 +196,10 @@ def classify(subject: str, body: str) -> str:
     body = own_text(body)
     plain = _DISCLAIMER_RX.sub(" ", _CONDITIONAL_RX.sub(" ", body))
     rejected = bool(_REJECT_RX.search(subject) or _REJECT_RX.search(plain))
-    if _OFFER_RX.search(f"{subject}\n{plain}") and not rejected:
+    # «Confirmation of Application Receipt»: в описании процесса бывает «…to a much-anticipated offer letter» —
+    # оффер из текста не засчитываем, если тема — подтверждение отклика
+    offer_in_body = _OFFER_RX.search(plain) and not _APPLIED_RX.search(subject)
+    if (_OFFER_RX.search(subject) or offer_in_body) and not rejected:
         return OFFER
     if rejected:
         return REJECTED
@@ -217,6 +229,10 @@ def _display_company(display: str) -> str:
     m = _DISPLAY_COMPANY_RX.search(display)
     if m:
         return m.group("c")
+    # «Acme @ icims» — компания до « @ »; «Globex School/Backend Python Developer» — до «/»
+    m = re.match(r"^(?P<c>[^@/]{2,40}?)\s*(?:\s@\s|/)", display)
+    if m:
+        return m.group("c")
     return "" if _PERSON_RX.match(display.strip()) else display
 
 
@@ -236,6 +252,12 @@ def company_of(sender: str, subject: str, body: str) -> str:
     у них имя отправителя не используется.
     """
     aliases = {company_key(k): v for k, v in SETTINGS.get("company_aliases", {}).items()}
+    # ручная привязка: имя или адрес -> компания — для писем, где компании нет нигде. Ищется в отправителе
+    # и в тексте: HiBob пишет от «No-reply (via Bob)», а имя рекрутера есть только в подписи
+    head = body[:3000].lower()
+    for part, company in SETTINGS.get("sender_company", {}).items():
+        if part.lower() in sender.lower() or part.lower() in head:
+            return company
     display, address = parseaddr(sender)
     domain = address.rpartition("@")[2].lower()
     via_service = bool(ATS_DOMAINS_RX.search(domain))
@@ -248,12 +270,19 @@ def company_of(sender: str, subject: str, body: str) -> str:
         local_m = _LOCAL_COMPANY_RX.match(address)
         if local_m:
             candidates.append(local_m.group(1))
+    # Google Calendar пишет от calendar-notification@google.com, а организатора ставит в имя:
+    # «j.smith@acme.com (Google Calendar)» — компания по его корпоративному домену
+    organizer = re.search(r"[\w.+-]+@([\w-]+(?:\.[\w-]+)+)", display)
+    if organizer and not FREE_MAIL_RX.search(organizer.group(1)) and not ATS_DOMAINS_RX.search(organizer.group(1)):
+        candidates.append(_domain_company(organizer.group(1).lower()))
     if via_service or FREE_MAIL_RX.search(domain):
         candidates += [m.group("c") for rx in _BODY_COMPANY_RXS if (m := rx.search(body[:1500]))]
     else:
         candidates.append(_domain_company(domain))
     for name in candidates:
         name = re.sub(r"^the\s+", "", _clean_name(name), flags=re.I)
+        if name.isupper() and len(name) > 4:  # «JOB OFFER AT ACME CORP»
+            name = name.title()
         if (name and len(name) <= 40 and not _GENERIC_SENDER_RX.match(name) and not _ROLE_NAME_RX.search(name)
                 and name.lower() not in _OWN_NAMES):
             return aliases.get(company_key(name), name)
@@ -471,6 +500,8 @@ def summarize(messages: list[dict]) -> tuple[list[Application], list[dict]]:
         if any(s in sender.lower() for s in ignore_senders) or _IGNORE_SUBJECT_RX.search(subject):
             continue
         kind = classify(subject, body)
+        if kind == OFFER and re.search(r"inmail|hit-reply@linkedin", sender, re.I):
+            kind = APPLIED  # «JOB OFFER AT X» в LinkedIn InMail — это рекрутер пишет первым, а не оффер
         company = company_of(sender, subject, body)
         when = datetime.fromtimestamp(msg["date"], tz=timezone.utc)
         if not company:

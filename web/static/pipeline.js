@@ -9,6 +9,7 @@ const COUNTER_NAMES = {
 };
 const STATUS_TEXT = { running: 'идёт', done: 'готово', failed: 'упал', interrupted: 'прерван' };
 let feedKind = 'all';
+document.querySelectorAll('.feed-filter button').forEach(b => { b.dataset.label = b.textContent; });
 let last = null;
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -30,6 +31,8 @@ function render(d) {
   const running = d.status === 'running';
   document.body.classList.toggle('is-running', running);
   document.querySelectorAll('[data-run]').forEach(b => b.disabled = d.busy);
+  const stop = $('stop-btn');
+  if (stop.hidden === !!d.busy) { stop.hidden = !d.busy; stop.disabled = false; stop.textContent = '⏹ Остановить прогон'; }
   $('script').textContent = `${d.script}.py · ${STATUS_TEXT[d.status] || d.status}`;
   const stage = d.stages.find(s => s.key === d.stage);
   $('headline').textContent = running && stage ? stage.title
@@ -92,16 +95,24 @@ function render(d) {
   $('tiles').innerHTML = Object.entries(d.counters || {}).map(([k, v]) =>
     `<div class="tile"><b>${Number(v).toLocaleString('ru')}</b><span title="${esc(COUNTER_NAMES[k] || k)}">${esc(COUNTER_NAMES[k] || k)}</span></div>`).join('');
 
-  bars('rejects', (d.tallies || {}).rejects, k => k, k => k === 'прошла' ? 'ok' : '');
+  // «прошла» — не причина отказа (число прошедших — в плитке «прошли фильтры»), но в «из N проверенных» входит
+  const { 'прошла': _passed, ...reasons } = (d.tallies || {}).rejects || {};
+  bars('rejects', reasons, k => k, () => '');
   const rejects = Object.values((d.tallies || {}).rejects || {}).reduce((a, b) => a + b, 0);
   $('rejects-total').textContent = rejects ? `из ${rejects.toLocaleString('ru')} проверенных` : '';
   bars('kinds', (d.tallies || {}).source_kinds, k => KIND_NAMES[k] || k, () => 'blue');
 
   renderFeed();
-  $('errors-box').hidden = !(d.errors || []).length;
-  $('errors-count').textContent = (d.errors || []).length || '';
-  $('errors').innerHTML = (d.errors || []).slice(-8).reverse().map(e =>
-    `<li><time>${e.time.slice(11, 19)}</time> <b>${esc(e.level)}</b> ${esc(e.message)}</li>`).join('');
+  // все предупреждения текущего прогона по группам (progress.error_group), новые сверху
+  const errs = d.errors || [];
+  $('errors-box').hidden = !errs.length;
+  document.querySelectorAll('#errors-box .err-group').forEach(box => {
+    const items = errs.filter(e => (e.group || 'site') === box.dataset.group);
+    box.hidden = !items.length;
+    box.querySelector('[data-count]').textContent = items.length || '';
+    box.querySelector('.errors').innerHTML = items.slice().reverse().map(e =>
+      `<li><time>${e.time.slice(11, 19)}</time> <b>${esc(e.level)}</b> ${esc(e.message)}</li>`).join('');
+  });
 }
 
 function bars(id, tally, label, cls) {
@@ -114,8 +125,18 @@ function bars(id, tally, label, cls) {
     : '<div class="muted small">появится во время прогона</div>';
 }
 
+let feedShown = '';
 function renderFeed() {
-  const events = ((last && last.events) || []).filter(e => feedKind === 'all' || e.kind === feedKind).slice().reverse();
+  // вся лента прогона со всех этапов; перерисовка только когда что-то изменилось
+  const all = (last && last.events) || [];
+  const key = `${feedKind}:${all.length}:${all.length ? all[all.length - 1].time : ''}`;
+  if (key === feedShown) return;
+  feedShown = key;
+  document.querySelectorAll('.feed-filter button').forEach(b => {
+    const n = b.dataset.kind === 'all' ? all.length : all.filter(e => e.kind === b.dataset.kind).length;
+    b.textContent = `${b.dataset.label} ${n || ''}`.trim();
+  });
+  const events = all.filter(e => feedKind === 'all' || e.kind === feedKind).reverse();
   $('feed').innerHTML = events.length ? events.map(e =>
     `<li class="ev ${e.kind}"><time>${e.time.slice(11, 19)}</time><span>${esc(e.text)}</span></li>`).join('')
     : '<li class="muted small">событий пока нет</li>';
@@ -160,6 +181,15 @@ $('skip-btn').addEventListener('click', async e => {
   const r = await fetch('/api/runs/current/skip', { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ stage: b.dataset.stage }) });
   if (!r.ok) { alert((await r.json()).detail || 'Не удалось'); b.disabled = false; b.textContent = '⏭ Пропустить этап'; }
+});
+
+$('stop-btn').addEventListener('click', async e => {
+  const b = e.currentTarget;
+  if (!confirm('Остановить прогон целиком? Собранное в этом прогоне не сохранится, отчёты останутся от прошлого.')) return;
+  b.disabled = true;
+  b.textContent = 'Останавливаю…';
+  const r = await fetch('/api/runs/current/stop', { method: 'POST' });
+  if (!r.ok) { alert((await r.json()).detail || 'Не удалось'); b.disabled = false; b.textContent = '⏹ Остановить прогон'; }
 });
 
 const stream = new EventSource('/api/progress/stream');
